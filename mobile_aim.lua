@@ -1,10 +1,11 @@
--- Ultra Mobile AIM Script for Madder Mystery by Beta01
+-- Enhanced Mobile AIM Script with X-Ray by Beta01
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -15,7 +16,9 @@ local Settings = {
     Smoothness = 0.2,
     TeamCheck = true,
     WallCheck = true,
-    ShowFOV = true
+    ShowFOV = true,
+    XRay = false,
+    ShowRoles = true
 }
 
 -- Удаляем старый GUI если существует
@@ -29,14 +32,27 @@ ScreenGui.Name = "MobileAimGUI"
 ScreenGui.Parent = CoreGui
 ScreenGui.ResetOnSpawn = false
 
--- Основной фрейм меню
+-- Иконка для открытия/закрытия меню
+local ToggleIcon = Instance.new("TextButton")
+ToggleIcon.Text = "⚙️"
+ToggleIcon.Size = UDim2.new(0, 50, 0, 50)
+ToggleIcon.Position = UDim2.new(0, 10, 0, 10)
+ToggleIcon.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ToggleIcon.BackgroundTransparency = 0.5
+ToggleIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleIcon.Font = Enum.Font.SourceSansBold
+ToggleIcon.TextSize = 24
+ToggleIcon.Parent = ScreenGui
+
+-- Основной фрейм меню (изначально скрыт)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 300, 0, 400)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
+MainFrame.Size = UDim2.new(0, 300, 0, 450)
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -225)
 MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 MainFrame.BorderSizePixel = 2
 MainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
+MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
 
 -- Заголовок
@@ -49,24 +65,13 @@ Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 18
 Title.Parent = MainFrame
 
--- Кнопка сворачивания
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Text = "−"
-ToggleButton.Size = UDim2.new(0, 40, 0, 40)
-ToggleButton.Position = UDim2.new(1, -40, 0, 0)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Font = Enum.Font.SourceSansBold
-ToggleButton.TextSize = 20
-ToggleButton.Parent = MainFrame
-
 -- Контейнер для элементов управления
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Size = UDim2.new(1, -10, 1, -50)
 ScrollFrame.Position = UDim2.new(0, 5, 0, 45)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.ScrollBarThickness = 5
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 380)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 430)
 ScrollFrame.Parent = MainFrame
 
 -- Элементы управления
@@ -76,7 +81,9 @@ local controls = {
     {"Smoothness", "Slider", "Плавность: ", 0.1, 1},
     {"TeamCheck", "Toggle", "Игнорировать союзников"},
     {"WallCheck", "Toggle", "Проверка стен"},
-    {"ShowFOV", "Toggle", "Показать FOV круг"}
+    {"ShowFOV", "Toggle", "Показать FOV круг"},
+    {"XRay", "Toggle", "X-Ray видение"},
+    {"ShowRoles", "Toggle", "Показывать роли"}
 }
 
 local function createControl(yPosition, config)
@@ -113,6 +120,11 @@ local function createControl(yPosition, config)
             Settings[name] = not Settings[name]
             toggle.Text = Settings[name] and "ON" or "OFF"
             toggle.BackgroundColor3 = Settings[name] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+            
+            -- Обновляем X-Ray при изменении настроек
+            if name == "XRay" then
+                updateXRay()
+            end
         end)
         
     elseif type == "Slider" then
@@ -146,7 +158,7 @@ local function createControl(yPosition, config)
         button.Text = ""
         button.Parent = sliderFrame
         
-        button.MouseButton1Down:Connect(function(x, y)
+        button.MouseButton1Down:Connect(function()
             local connection
             connection = RunService.RenderStepped:Connect(function()
                 if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
@@ -170,21 +182,6 @@ for i, config in ipairs(controls) do
 end
 
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, #controls * 55)
-
--- Функционал сворачивания
-local minimized = false
-ToggleButton.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    ToggleButton.Text = minimized and "+" or "−"
-    
-    if minimized then
-        MainFrame.Size = UDim2.new(0, 300, 0, 40)
-        ScrollFrame.Visible = false
-    else
-        MainFrame.Size = UDim2.new(0, 300, 0, 400)
-        ScrollFrame.Visible = true
-    end
-end)
 
 -- Функция перетаскивания окна
 local dragging = false
@@ -239,6 +236,113 @@ AimButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 AimButton.Font = Enum.Font.SourceSansBold
 AimButton.TextSize = 16
 AimButton.Parent = ScreenGui
+
+-- Функция для определения ролей (убийца, шериф)
+local function getPlayerRole(player)
+    if not player.Character then return "Unknown" end
+    
+    -- Проверка на убийцу (обычно имеет нож)
+    if player.Character:FindFirstChild("Knife") or player.Backpack:FindFirstChild("Knife") then
+        return "Murderer"
+    end
+    
+    -- Проверка на шерифа (обычно имеет оружие)
+    if player.Character:FindFirstChild("Gun") or player.Backpack:FindFirstChild("Gun") then
+        return "Sheriff"
+    end
+    
+    -- Проверка по имени (на всякий случай)
+    if player.Name:lower():find("murder") or player.DisplayName:lower():find("murder") then
+        return "Murderer"
+    end
+    
+    if player.Name:lower():find("sheriff") or player.DisplayName:lower():find("sheriff") then
+        return "Sheriff"
+    end
+    
+    return "Innocent"
+end
+
+-- X-Ray функция
+local xRayParts = {}
+local function updateXRay()
+    if not Settings.XRay then
+        -- Отключаем X-Ray
+        for _, part in pairs(xRayParts) do
+            if part then
+                part.LocalTransparencyModifier = 0
+            end
+        end
+        xRayParts = {}
+        return
+    end
+    
+    -- Включаем X-Ray
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            for _, part in ipairs(player.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.LocalTransparencyModifier = 0.7
+                    xRayParts[#xRayParts + 1] = part
+                end
+            end
+        end
+    end
+end
+
+-- Функция для отображения ролей над игроками
+local roleLabels = {}
+local function updateRoleLabels()
+    if not Settings.ShowRoles then
+        -- Удаляем все метки
+        for _, label in pairs(roleLabels) do
+            if label then
+                label:Destroy()
+            end
+        end
+        roleLabels = {}
+        return
+    end
+    
+    -- Обновляем метки
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if humanoidRootPart then
+                local role = getPlayerRole(player)
+                
+                -- Создаем или обновляем метку
+                if not roleLabels[player] then
+                    local billboardGui = Instance.new("BillboardGui")
+                    billboardGui.Size = UDim2.new(0, 100, 0, 40)
+                    billboardGui.AlwaysOnTop = true
+                    billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+                    billboardGui.Adornee = humanoidRootPart
+                    billboardGui.Parent = ScreenGui
+                    
+                    local textLabel = Instance.new("TextLabel")
+                    textLabel.Size = UDim2.new(1, 0, 1, 0)
+                    textLabel.BackgroundTransparency = 1
+                    textLabel.Text = role
+                    textLabel.TextColor3 = role == "Murderer" and Color3.fromRGB(255, 0, 0) or 
+                                         role == "Sheriff" and Color3.fromRGB(0, 0, 255) or 
+                                         Color3.fromRGB(255, 255, 255)
+                    textLabel.Font = Enum.Font.SourceSansBold
+                    textLabel.TextSize = 18
+                    textLabel.Parent = billboardGui
+                    
+                    roleLabels[player] = billboardGui
+                else
+                    roleLabels[player].TextLabel.Text = role
+                    roleLabels[player].TextLabel.TextColor3 = role == "Murderer" and Color3.fromRGB(255, 0, 0) or 
+                                                             role == "Sheriff" and Color3.fromRGB(0, 0, 255) or 
+                                                             Color3.fromRGB(255, 255, 255)
+                    roleLabels[player].Adornee = humanoidRootPart
+                end
+            end
+        end
+    end
+end
 
 -- Основная логика аимбота
 local function FindTarget()
@@ -321,9 +425,18 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
     FOVCircle.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2)
     FOVCircle.Position = UDim2.new(0.5, -Settings.FOV, 0.5, -Settings.FOV)
+    
+    -- Обновляем X-Ray и метки ролей
+    updateXRay()
+    updateRoleLabels()
 end)
 
--- Кнопка закрытия GUI
+-- Функция переключения видимости меню
+ToggleIcon.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+end)
+
+-- Кнопка закрытия GUI в меню
 local CloseButton = Instance.new("TextButton")
 CloseButton.Text = "X"
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
@@ -334,12 +447,9 @@ CloseButton.Font = Enum.Font.SourceSansBold
 CloseButton.Parent = MainFrame
 
 CloseButton.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-    if autoAimConnection then
-        autoAimConnection:Disconnect()
-    end
+    MainFrame.Visible = false
 end)
 
-print("✅ Ultra Mobile AIM активирован")
-print("📱 Полная совместимость с мобильными устройствами")
-print("🎯 Автоматическое прицеливание + кнопка ручного управления")          
+print("✅ Enhanced Mobile AIM активирован")
+print("👁️ X-Ray и определение ролей добавлено")
+print("📱 Меню можно скрывать/показывать через иконку ⚙️")
