@@ -616,25 +616,6 @@ RunService.RenderStepped:Connect(function()
     updateWeaponESP()
 end)
 
---     end
-
--- Обработчик нажатия кнопки
-button.MouseButton1Click:Connect(function()
-    FALL_ANIMATION_ENABLED = not FALL_ANIMATION_ENABLED
-    CUSTOM_SKIN_ENABLED = not CUSTOM_SKIN_ENABLED
-    
-    if FALL_ANIMATION_ENABLED then
-        button.Text = "Выключить анимацию"
-        button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        applyCustomSkin()
-        spawn(playFallAnimation)
-    else
-        button.Text = "Включить анимацию"
-        button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        restoreOriginalSkin()
-    end
-end)
-
 showNotification("✅ Часть 2/2 загружена! Все функции активированы.", 5)
 
 print("✅ Часть 2/2 загружена - Дополнительные функции")
