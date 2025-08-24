@@ -1,4 +1,4 @@
--- ULTIMATE FIXED MADDER MYSTERY SCRIPT
+-- ULTIMATE MADDER MYSTERY SCRIPT WITH ROLE ESP
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,6 +6,8 @@ local Camera = workspace.CurrentCamera
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -19,7 +21,13 @@ local Settings = {
     ShowFOV = true,
     WeaponESP = true,
     AutoPickup = true,
-    SimpleAim = true -- Простой режим аимбота без лагов
+    SimpleAim = true,
+    RoleESP = true, -- Показывать роли над игроками
+    MurdererAlert = true, -- Оповещение об убийце
+    SheriffHelper = true, -- Помощь шерифу
+    SpeedBoost = false, -- Ускорение передвижения
+    NoClip = false, -- Режим NoClip
+    VisionBoost = false -- Улучшенное зрение
 }
 
 -- Очистка предыдущего GUI
@@ -48,8 +56,8 @@ ToggleIcon.Parent = ScreenGui
 -- Основное меню
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 300, 0, 400)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
+MainFrame.Size = UDim2.new(0, 320, 0, 500)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -250)
 MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 MainFrame.BorderSizePixel = 2
 MainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
@@ -58,7 +66,7 @@ MainFrame.Parent = ScreenGui
 
 -- Заголовок
 local Title = Instance.new("TextLabel")
-Title.Text = "Madder Mystery Settings"
+Title.Text = "Madder Mystery Ultimate"
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -72,10 +80,10 @@ ScrollFrame.Size = UDim2.new(1, -10, 1, -50)
 ScrollFrame.Position = UDim2.new(0, 5, 0, 45)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.ScrollBarThickness = 5
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 380)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 600)
 ScrollFrame.Parent = MainFrame
 
--- Простые настройки
+-- Настройки
 local controls = {
     {"Enabled", "Toggle", "Активировать аим"},
     {"FOV", "Slider", "Поле зрения: ", 50, 200},
@@ -85,7 +93,13 @@ local controls = {
     {"ShowFOV", "Toggle", "Показать FOV круг"},
     {"WeaponESP", "Toggle", "Подсветка оружия"},
     {"AutoPickup", "Toggle", "Автоподбор оружия"},
-    {"SimpleAim", "Toggle", "Простой режим (меньше лагов)"}
+    {"SimpleAim", "Toggle", "Простой режим (меньше лагов)"},
+    {"RoleESP", "Toggle", "Показывать роли игроков"},
+    {"MurdererAlert", "Toggle", "Оповещение об убийце"},
+    {"SheriffHelper", "Toggle", "Помощь шерифу"},
+    {"SpeedBoost", "Toggle", "Ускорение передвижения"},
+    {"NoClip", "Toggle", "Режим NoClip"},
+    {"VisionBoost", "Toggle", "Улучшенное зрение"}
 }
 
 -- Функция создания элементов управления
@@ -168,7 +182,7 @@ local function createControl(yPosition, config)
                 local percent = math.clamp((mousePos.X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
                 Settings[name] = min + (max - min) * percent
                 fill.Size = UDim2.new(percent, 0, 1, 0)
-                valueLabel.Text = string.format(type == "Smoothness" and "%.2f" or "%.0f", Settings[name])
+                valueLabel.Text = string.format("Smoothness" and "%.2f" or "%.0f", Settings[name])
             end)
         end)
     end
@@ -250,6 +264,70 @@ local function getPlayerRole(player)
     end
     
     return "Innocent"
+end
+
+-- ESP для отображения ролей
+local roleESP = {}
+local function updateRoleESP()
+    if not Settings.RoleESP then
+        -- Удаляем все ESP
+        for _, esp in pairs(roleESP) do
+            if esp then
+                esp:Destroy()
+            end
+        end
+        roleESP = {}
+        return
+    end
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if humanoidRootPart then
+                local role = getPlayerRole(player)
+                local color = Color3.fromRGB(255, 255, 255) -- По умолчанию белый
+                
+                if role == "Murderer" then
+                    color = Color3.fromRGB(255, 0, 0) -- Красный для убийцы
+                elseif role == "Sheriff" then
+                    color = Color3.fromRGB(0, 0, 255) -- Синий для шерифа
+                end
+                
+                -- Создаем или обновляем ESP
+                if not roleESP[player] then
+                    local billboard = Instance.new("BillboardGui")
+                    billboard.Size = UDim2.new(0, 200, 0, 50)
+                    billboard.AlwaysOnTop = true
+                    billboard.StudsOffset = Vector3.new(0, 3, 0)
+                    billboard.Adornee = humanoidRootPart
+                    billboard.Parent = ScreenGui
+                    
+                    local textLabel = Instance.new("TextLabel")
+                    textLabel.Size = UDim2.new(1, 0, 1, 0)
+                    textLabel.BackgroundTransparency = 1
+                    textLabel.Text = player.Name .. " (" .. role .. ")"
+                    textLabel.TextColor3 = color
+                    textLabel.Font = Enum.Font.SourceSansBold
+                    textLabel.TextSize = 16
+                    textLabel.Parent = billboard
+                    
+                    roleESP[player] = billboard
+                else
+                    roleESP[player].TextLabel.Text = player.Name .. " (" .. role .. ")"
+                    roleESP[player].TextLabel.TextColor3 = color
+                    roleESP[player].Adornee = humanoidRootPart
+                end
+            end
+        end
+    end
+
+    -- Удаляем ESP для игроков, которые вышли
+    for player, esp in pairs(roleESP) do
+        if not player or not player.Parent then
+            esp:Destroy()
+            roleESP[player] = nil
+        end
+    end
 end
 
 -- Упрощенная логика аимбота
@@ -406,120 +484,143 @@ end
 -- Запускаем систему автоподбора
 spawn(setupAutoWeaponPickup)
 
--- СИСТЕМА ВЫБОРА РОЛИ (ПРОСТАЯ ВЕРСИЯ)
-local roleSelectionFrame = Instance.new("Frame")
-roleSelectionFrame.Size = UDim2.new(0, 200, 0, 100)
-roleSelectionFrame.Position = UDim2.new(0, 10, 0, 70)
-roleSelectionFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-roleSelectionFrame.BackgroundTransparency = 0.7
-roleSelectionFrame.BorderSizePixel = 0
-roleSelectionFrame.Visible = false
-roleSelectionFrame.Parent = ScreenGui
+-- НОВЫЕ ФУНКЦИИ
 
-local roleLabel = Instance.new("TextLabel")
-roleLabel.Text = "Выбор роли:"
-roleLabel.Size = UDim2.new(1, 0, 0, 30)
-roleLabel.BackgroundTransparency = 1
-roleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-roleLabel.Font = Enum.Font.SourceSansBold
-roleLabel.TextSize = 16
-roleLabel.Parent = roleSelectionFrame
-
-local roleToggle = Instance.new("TextButton")
-roleToggle.Text = "🎭"
-roleToggle.Size = UDim2.new(0, 50, 0, 50)
-roleToggle.Position = UDim2.new(0, 10, 0, 70)
-roleToggle.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-roleToggle.BackgroundTransparency = 0.5
-roleToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-roleToggle.Font = Enum.Font.SourceSansBold
-roleToggle.TextSize = 24
-roleToggle.Parent = ScreenGui
-
-roleToggle.MouseButton1Click:Connect(function()
-    roleSelectionFrame.Visible = not roleSelectionFrame.Visible
-end)
-
--- Функция для попытки выбора роли
-local function trySelectRole(role)
-    -- Попытка найти стандартные RemoteEvents для выбора роли
-    local events = {
-        "GetChosen", "RequestRole", "BecomeSheriff", "BecomeMurderer",
-        "SelectRole", "RoleSelection", "GetMurderer", "GetSheriff"
-    }
-    
-    for _, eventName in ipairs(events) do
-        local event = game:GetService("ReplicatedStorage"):FindFirstChild(eventName)
-        if event and event:IsA("RemoteEvent") then
-            event:FireServer(role)
-            return true
+-- 1. ОПОВЕЩЕНИЕ ОБ УБИЙЦЕ
+local function setupMurdererAlert()
+    while true do
+        if Settings.MurdererAlert then
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and getPlayerRole(player) == "Murderer" then
+                    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                        local distance = (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                        if distance < 30 then
+                            -- Создаем предупреждение
+                            local alert = Instance.new("TextLabel")
+                            alert.Text = "⚠️ УБИЙЦА РЯДОМ! ⚠️"
+                            alert.Size = UDim2.new(0, 300, 0, 50)
+                            alert.Position = UDim2.new(0.5, -150, 0.2, 0)
+                            alert.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                            alert.TextColor3 = Color3.fromRGB(255, 255, 255)
+                            alert.Font = Enum.Font.SourceSansBold
+                            alert.TextSize = 20
+                            alert.Parent = ScreenGui
+                            
+                            wait(3)
+                            alert:Destroy()
+                            break
+                        end
+                    end
+                end
+            end
         end
+        wait(1)
     end
-    
-    return false
 end
 
-local sheriffBtn = Instance.new("TextButton")
-sheriffBtn.Text = "Шериф"
-sheriffBtn.Size = UDim2.new(0.45, 0, 0, 30)
-sheriffBtn.Position = UDim2.new(0, 5, 0, 40)
-sheriffBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
-sheriffBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-sheriffBtn.Font = Enum.Font.SourceSans
-sheriffBtn.TextSize = 14
-sheriffBtn.Parent = roleSelectionFrame
-
-sheriffBtn.MouseButton1Click:Connect(function()
-    if trySelectRole("Sheriff") then
-        roleSelectionFrame.Visible = false
-    else
-        -- Если не нашли RemoteEvent, просто покажем уведомление
-        local notif = Instance.new("TextLabel")
-        notif.Text = "Не удалось выбрать роль автоматически"
-        notif.Size = UDim2.new(0, 300, 0, 40)
-        notif.Position = UDim2.new(0.5, -150, 0.1, 0)
-        notif.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        notif.TextColor3 = Color3.fromRGB(255, 255, 255)
-        notif.Font = Enum.Font.SourceSansBold
-        notif.TextSize = 16
-        notif.Parent = ScreenGui
-        
-        game:GetService("Debris"):AddItem(notif, 3)
+-- 2. ПОМОЩЬ ШЕРИФУ
+local function setupSheriffHelper()
+    while true do
+        if Settings.SheriffHelper and getPlayerRole(LocalPlayer) == "Sheriff" then
+            -- Автоматическая перезарядка оружия
+            local gun = LocalPlayer.Character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
+            if gun then
+                local ammo = gun:FindFirstChild("Ammo")
+                if ammo and ammo.Value == 0 then
+                    -- Ищем патроны
+                    for _, item in ipairs(Workspace:GetDescendants()) do
+                        if item.Name:lower():find("ammo") and item:IsA("Part") then
+                            local distance = (item.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                            if distance < 20 then
+                                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, item, 0)
+                                wait()
+                                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, item, 1)
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        wait(2)
     end
-end)
+end
 
-local murdererBtn = Instance.new("TextButton")
-murdererBtn.Text = "Убийца"
-murdererBtn.Size = UDim2.new(0.45, 0, 0, 30)
-murdererBtn.Position = UDim2.new(0.5, 5, 0, 40)
-murdererBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-murdererBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-murdererBtn.Font = Enum.Font.SourceSans
-murdererBtn.TextSize = 14
-murdererBtn.Parent = roleSelectionFrame
-
-murdererBtn.MouseButton1Click:Connect(function()
-    if trySelectRole("Murderer") then
-        roleSelectionFrame.Visible = false
+-- 3. УСКОРЕНИЕ ПЕРЕДВИЖЕНИЯ
+local originalWalkSpeed = 16
+local function setupSpeedBoost()
+    if Settings.SpeedBoost and LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = 30
+        end
     else
-        -- Если не нашли RemoteEvent, просто покажем уведомление
-        local notif = Instance.new("TextLabel")
-        notif.Text = "Не удалось выбрать роль автоматически"
-        notif.Size = UDim2.new(0, 300, 0, 40)
-        notif.Position = UDim2.new(0.5, -150, 0.1, 0)
-        notif.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        notif.TextColor3 = Color3.fromRGB(255, 255, 255)
-        notif.Font = Enum.Font.SourceSansBold
-        notif.TextSize = 16
-        notif.Parent = ScreenGui
-        
-        game:GetService("Debris"):AddItem(notif, 3)
+        if LocalPlayer.Character then
+            local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = originalWalkSpeed
+            end
+        end
     end
+end
+
+-- 4. РЕЖИМ NOCLIP
+local function setupNoClip()
+    if Settings.NoClip and LocalPlayer.Character then
+        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    else
+        if LocalPlayer.Character then
+            for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+end
+
+-- 5. УЛУЧШЕННОЕ ЗРЕНИЕ
+local function setupVisionBoost()
+    if Settings.VisionBoost then
+        Lighting.Brightness = 2
+        Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 200)
+        Lighting.FogEnd = 1000
+    else
+        Lighting.Brightness = 1
+        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+        Lighting.FogEnd = 10000
+    end
+end
+
+-- Запускаем все системы
+spawn(setupMurdererAlert)
+spawn(setupSheriffHelper)
+
+-- Основной цикл обновления
+RunService.RenderStepped:Connect(function()
+    -- Обновляем видимость FOV круга
+    if FOVCircle then
+        FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
+        FOVCircle.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2)
+        FOVCircle.Position = UDim2.new(0.5, -Settings.FOV, 0.5, -Settings.FOV)
+    end
+    
+    -- Обновляем ESP ролей
+    updateRoleESP()
+    
+    -- Обновляем дополнительные системы
+    setupSpeedBoost()
+    setupNoClip()
+    setupVisionBoost()
 end)
 
 -- Уведомление о загрузке
 local notif = Instance.new("TextLabel")
-notif.Text = "✅ Madder Mystery скрипт загружен!"
+notif.Text = "✅ Ultimate Madder Mystery загружен!"
 notif.Size = UDim2.new(0, 300, 0, 40)
 notif.Position = UDim2.new(0.5, -150, 0.1, 0)
 notif.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
@@ -530,7 +631,8 @@ notif.Parent = ScreenGui
 
 game:GetService("Debris"):AddItem(notif, 5)
 
-print("✅ Madder Mystery скрипт загружен")
+print("✅ Ultimate Madder Mystery скрипт загружен")
 print("🎯 Аимбот: " .. (Settings.Enabled and "ВКЛ" or "ВЫКЛ"))
 print("🔫 Автоподбор: " .. (Settings.AutoPickup and "ВКЛ" or "ВЫКЛ"))
-print("🎭 Выбор роли: Доступен через кнопку 🎭")
+print("👁️ ESP ролей: " .. (Settings.RoleESP and "ВКЛ" or "ВЫКЛ"))
+print("🚀 5 новых функций активировано!")
