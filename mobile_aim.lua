@@ -1,11 +1,10 @@
--- ULTIMATE Mobile AIM Script with Weapon ESP and Fixes by Beta01
+-- ULTIMATE AIMBOT - ЧАСТЬ 1/2
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
-local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
@@ -20,8 +19,8 @@ local Settings = {
     ShowFOV = true,
     XRay = false,
     ShowRoles = true,
-    WeaponESP = true, -- Новая функция: подсветка оружия на земле
-    SimpleRadar = true -- Упрощенный радар который точно работает
+    WeaponESP = true,
+    SimpleRadar = true
 }
 
 -- Удаляем старый GUI если существует
@@ -255,6 +254,129 @@ local function getPlayerRole(player)
     return "Innocent"
 end
 
+-- Основная логика аимбота
+local function FindTarget()
+    if not Settings.Enabled or not LocalPlayer.Character then return nil end
+    
+    local closestTarget = nil
+    local shortestDelta = Settings.FOV
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if not player.Character then continue end
+        
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        
+        if not humanoid or not rootPart or humanoid.Health <= 0 then continue end
+        
+        if Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+            continue
+        end
+        
+        if Settings.WallCheck then
+            local origin = Camera.CFrame.Position
+            local direction = (rootPart.Position - origin).Unit * 1000
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+            local result = workspace:Raycast(origin, direction, raycastParams)
+            
+            if result and result.Instance:FindFirstAncestor(player.Name) == nil then
+                continue
+            end
+        end
+
+        local screenPosition, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+        if onScreen then
+            local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+            local delta = (center - Vector2.new(screenPosition.X, screenPosition.Y)).Magnitude
+            
+            if delta < shortestDelta then
+                shortestDelta = delta
+                closestTarget = rootPart
+            end
+        end
+    end
+    
+    return closestTarget
+end
+
+-- Обработка касаний для аимбота
+AimButton.MouseButton1Down:Connect(function()
+    if not Settings.Enabled then return end
+    
+    local target = FindTarget()
+    if target then
+        local startCFrame = Camera.CFrame
+        local endCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        
+        local tweenInfo = TweenInfo.new(Settings.Smoothness, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(Camera, tweenInfo, {CFrame = endCFrame})
+        tween:Play()
+    end
+end)
+
+-- Автоматическое прицеливание
+local autoAimConnection
+autoAimConnection = RunService.RenderStepped:Connect(function()
+    if not Settings.Enabled or not LocalPlayer.Character then return end
+    
+    local target = FindTarget()
+    if target then
+        local currentCFrame = Camera.CFrame
+        local targetCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        Camera.CFrame = currentCFrame:Lerp(targetCFrame, Settings.Smoothness)
+    end
+end)
+
+-- Функция переключения видимости меню
+ToggleIcon.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+end)
+
+-- Кнопка закрытия GUI в меню
+local CloseButton = Instance.new("TextButton")
+CloseButton.Text = "X"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -35, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.Font = Enum.Font.SourceSansBold
+CloseButton.Parent = MainFrame
+
+CloseButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+end)
+
+-- Уведомление об успешной загрузке
+local function showNotification(message, duration)
+    local notif = Instance.new("TextLabel")
+    notif.Text = message
+    notif.Size = UDim2.new(0, 300, 0, 40)
+    notif.Position = UDim2.new(0.5, -150, 0.1, 0)
+    notif.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    notif.TextColor3 = Color3.fromRGB(255, 255, 255)
+    notif.Font = Enum.Font.SourceSansBold
+    notif.TextSize = 16
+    notif.Parent = ScreenGui
+    
+    delay(duration or 3, function()
+        if notif then
+            notif:Destroy()
+        end
+    end)
+end
+
+showNotification("✅ Часть 1/2 загружена! Запустите вторую часть.", 5)
+
+print("✅ Часть 1/2 загружена - Основной функционал")
+print("⚙️  GUI настроек создано")
+print("🎯 Аимбот активирован")
+print("⏳ Ожидание второй части...")
+-- ULTIMATE AIMBOT - ЧАСТЬ 2/2
+wait(1) -- Даем время первой части загрузиться
+
 -- X-Ray функция
 local xRayParts = {}
 local function updateXRay()
@@ -476,82 +598,6 @@ local function updateWeaponESP()
     end
 end
 
--- Основная логика аимбота
-local function FindTarget()
-    if not Settings.Enabled or not LocalPlayer.Character then return nil end
-    
-    local closestTarget = nil
-    local shortestDelta = Settings.FOV
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        if not player.Character then continue end
-        
-        local humanoid = player.Character:FindFirstChild("Humanoid")
-        local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        
-        if not humanoid or not rootPart or humanoid.Health <= 0 then continue end
-        
-        if Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-            continue
-        end
-        
-        if Settings.WallCheck then
-            local origin = Camera.CFrame.Position
-            local direction = (rootPart.Position - origin).Unit * 1000
-            local raycastParams = RaycastParams.new()
-            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-            local result = workspace:Raycast(origin, direction, raycastParams)
-            
-            if result and result.Instance:FindFirstAncestor(player.Name) == nil then
-                continue
-            end
-        end
-
-        local screenPosition, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
-        if onScreen then
-            local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-            local delta = (center - Vector2.new(screenPosition.X, screenPosition.Y)).Magnitude
-            
-            if delta < shortestDelta then
-                shortestDelta = delta
-                closestTarget = rootPart
-            end
-        end
-    end
-    
-    return closestTarget
-end
-
--- Обработка касаний для аимбота
-AimButton.MouseButton1Down:Connect(function()
-    if not Settings.Enabled then return end
-    
-    local target = FindTarget()
-    if target then
-        local startCFrame = Camera.CFrame
-        local endCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-        
-        local tweenInfo = TweenInfo.new(Settings.Smoothness, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        local tween = TweenService:Create(Camera, tweenInfo, {CFrame = endCFrame})
-        tween:Play()
-    end
-end)
-
--- Автоматическое прицеливание
-local autoAimConnection
-autoAimConnection = RunService.RenderStepped:Connect(function()
-    if not Settings.Enabled or not LocalPlayer.Character then return end
-    
-    local target = FindTarget()
-    if target then
-        local currentCFrame = Camera.CFrame
-        local targetCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-        Camera.CFrame = currentCFrame:Lerp(targetCFrame, Settings.Smoothness)
-    end
-end)
-
 -- Основной цикл обновления
 RunService.RenderStepped:Connect(function()
     -- Обновляем видимость FOV круга
@@ -570,47 +616,10 @@ RunService.RenderStepped:Connect(function()
     updateWeaponESP()
 end)
 
--- Функция переключения видимости меню
-ToggleIcon.MouseButton1Click:Connect(function()
-    MainFrame.Visible = not MainFrame.Visible
-end)
+showNotification("✅ Часть 2/2 загружена! Все функции активированы.", 5)
 
--- Кнопка закрытия GUI в меню
-local CloseButton = Instance.new("TextButton")
-CloseButton.Text = "X"
-CloseButton.Size = UDim2.new(0, 30, 0, 30)
-CloseButton.Position = UDim2.new(1, -35, 0, 5)
-CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.Font = Enum.Font.SourceSansBold
-CloseButton.Parent = MainFrame
-
-CloseButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
-end)
-
--- Уведомление об успешной загрузке
-local function showNotification(message, duration)
-    local notif = Instance.new("TextLabel")
-    notif.Text = message
-    notif.Size = UDim2.new(0, 300, 0, 40)
-    notif.Position = UDim2.new(0.5, -150, 0.1, 0)
-    notif.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    notif.TextColor3 = Color3.fromRGB(255, 255, 255)
-    notif.Font = Enum.Font.SourceSansBold
-    notif.TextSize = 16
-    notif.Parent = ScreenGui
-    
-    delay(duration or 3, function()
-        if notif then
-            notif:Destroy()
-        end
-    end)
-end
-
-showNotification("✅ Ultimate AIM загружен! Нажми ⚙️ для настроек")
-
-print("✅ Ultimate Mobile AIM активирован")
-print("🔫 Weapon ESP: Видно оружие на земле после смерти")
-print("📡 Simple Radar: Гарантированно работающий радар")
-print("👁️ Все функции проверены и работают")
+print("✅ Часть 2/2 загружена - Дополнительные функции")
+print("🔫 Weapon ESP: Видно оружие на земле")
+print("📡 Simple Radar: Радар активирован")
+print("👁️ X-Ray и роли работают")
+print("🎉 Весь функционал активирован!")
