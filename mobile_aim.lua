@@ -1,4 +1,4 @@
--- ULTIMATE MADDER MYSTERY SCRIPT WITH ROLE ESP
+-- ULTIMATE MADDER MYSTERY SCRIPT WITH ADVANCED FEATURES
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -22,12 +22,14 @@ local Settings = {
     WeaponESP = true,
     AutoPickup = true,
     SimpleAim = true,
-    RoleESP = true, -- Показывать роли над игроками
-    MurdererAlert = true, -- Оповещение об убийце
-    SheriffHelper = true, -- Помощь шерифу
-    SpeedBoost = false, -- Ускорение передвижения
-    NoClip = false, -- Режим NoClip
-    VisionBoost = false -- Улучшенное зрение
+    RoleESP = true,
+    MurdererAlert = true,
+    SheriffHelper = true,
+    SpeedBoost = false,
+    NoClip = false,
+    VisionBoost = false,
+    AutoTeleportToGun = false, -- Автотелепорт к оружию
+    RoleRequest = false -- Запрос роли
 }
 
 -- Очистка предыдущего GUI
@@ -56,8 +58,8 @@ ToggleIcon.Parent = ScreenGui
 -- Основное меню
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 320, 0, 500)
-MainFrame.Position = UDim2.new(0.5, -160, 0.5, -250)
+MainFrame.Size = UDim2.new(0, 320, 0, 550)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -275)
 MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 MainFrame.BorderSizePixel = 2
 MainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
@@ -80,7 +82,7 @@ ScrollFrame.Size = UDim2.new(1, -10, 1, -50)
 ScrollFrame.Position = UDim2.new(0, 5, 0, 45)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.ScrollBarThickness = 5
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 600)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 650)
 ScrollFrame.Parent = MainFrame
 
 -- Настройки
@@ -99,7 +101,9 @@ local controls = {
     {"SheriffHelper", "Toggle", "Помощь шерифу"},
     {"SpeedBoost", "Toggle", "Ускорение передвижения"},
     {"NoClip", "Toggle", "Режим NoClip"},
-    {"VisionBoost", "Toggle", "Улучшенное зрение"}
+    {"VisionBoost", "Toggle", "Улучшенное зрение"},
+    {"AutoTeleportToGun", "Toggle", "Автотелепорт к оружию"},
+    {"RoleRequest", "Toggle", "Запрос роли в следующей игре"}
 }
 
 -- Функция создания элементов управления
@@ -237,18 +241,6 @@ FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
 FOVCircle.ZIndex = 0
 FOVCircle.Parent = ScreenGui
 
--- Кнопка активации аима
-local AimButton = Instance.new("TextButton")
-AimButton.Size = UDim2.new(0, 80, 0, 80)
-AimButton.Position = UDim2.new(1, -90, 1, -90)
-AimButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-AimButton.BackgroundTransparency = 0.5
-AimButton.Text = "AIM"
-AimButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-AimButton.Font = Enum.Font.SourceSansBold
-AimButton.TextSize = 16
-AimButton.Parent = ScreenGui
-
 -- Функция для определения ролей
 local function getPlayerRole(player)
     if not player.Character then return "Unknown" end
@@ -320,7 +312,7 @@ local function updateRoleESP()
             end
         end
     end
-
+    
     -- Удаляем ESP для игроков, которые вышли
     for player, esp in pairs(roleESP) do
         if not player or not player.Parent then
@@ -377,21 +369,6 @@ local function FindTarget()
     
     return closestTarget
 end
-
--- Обработка касаний для аимбота
-AimButton.MouseButton1Down:Connect(function()
-    if not Settings.Enabled then return end
-    
-    local target = FindTarget()
-    if target then
-        local startCFrame = Camera.CFrame
-        local endCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-        
-        local tweenInfo = TweenInfo.new(Settings.Smoothness, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        local tween = TweenService:Create(Camera, tweenInfo, {CFrame = endCFrame})
-        tween:Play()
-    end
-end)
 
 -- Автоматическое прицеливание (только в простом режиме)
 local autoAimConnection
@@ -596,9 +573,100 @@ local function setupVisionBoost()
     end
 end
 
+-- 6. АВТОТЕЛЕПОРТ К ОРУЖИЮ ПОСЛЕ СМЕРТИ ШЕРИФА
+local originalPosition = nil
+local function setupAutoTeleportToGun()
+    while true do
+        if Settings.AutoTeleportToGun then
+            -- Ищем шерифа
+            for _, player in ipairs(Players:GetPlayers()) do
+                if getPlayerRole(player) == "Sheriff" then
+                    -- Проверяем, умер ли шериф
+                    if player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health <= 0 then
+                        -- Сохраняем текущую позицию
+                        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                            originalPosition = LocalPlayer.Character.HumanoidRootPart.Position
+                            
+                            -- Ищем оружие шерифа
+                            for _, item in ipairs(Workspace:GetDescendants()) do
+                                if item:IsA("Tool") and (item.Name:lower():find("gun") or item.Name:lower():find("revolver") or item.Name:lower():find("pistol")) then
+                                    -- Телепортируемся к оружию
+                                    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(item.Handle.Position)
+                                    
+                                    -- Ждем немного и возвращаемся
+                                    wait(1)
+                                    
+                                    -- Возвращаемся на исходную позицию
+                                    if originalPosition then
+                                        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(originalPosition)
+                                        originalPosition = nil
+                                    end
+                                    
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        wait(2)
+    end
+end
+
+-- 7. СИСТЕМА ЗАПРОСА РОЛИ
+local function setupRoleRequest()
+    if Settings.RoleRequest then
+        -- Пытаемся найти RemoteEvent для запроса роли
+        local events = {
+            "GetChosen", "RequestRole", "BecomeSheriff", "BecomeMurderer",
+            "SelectRole", "RoleSelection", "GetMurderer", "GetSheriff"
+        }
+        
+        for _, eventName in ipairs(events) do
+            local event = ReplicatedStorage:FindFirstChild(eventName)
+            if event and event:IsA("RemoteEvent") then
+                -- Пытаемся стать шерифом
+                event:FireServer("Sheriff")
+                
+                -- Создаем уведомление
+                local notif = Instance.new("TextLabel")
+                notif.Text = "Запрос роли Шерифа отправлен"
+                notif.Size = UDim2.new(0, 300, 0, 40)
+                notif.Position = UDim2.new(0.5, -150, 0.1, 0)
+                notif.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+                notif.TextColor3 = Color3.fromRGB(255, 255, 255)
+                notif.Font = Enum.Font.SourceSansBold
+                notif.TextSize = 16
+                notif.Parent = ScreenGui
+                
+                game:GetService("Debris"):AddItem(notif, 3)
+                break
+            end
+        end
+    end
+end
+
 -- Запускаем все системы
 spawn(setupMurdererAlert)
 spawn(setupSheriffHelper)
+spawn(setupAutoTeleportToGun)
+
+-- Кнопка для запроса роли
+local RoleRequestButton = Instance.new("TextButton")
+RoleRequestButton.Text = "🎭"
+RoleRequestButton.Size = UDim2.new(0, 50, 0, 50)
+RoleRequestButton.Position = UDim2.new(0, 70, 0, 10)
+RoleRequestButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+RoleRequestButton.BackgroundTransparency = 0.5
+RoleRequestButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+RoleRequestButton.Font = Enum.Font.SourceSansBold
+RoleRequestButton.TextSize = 24
+RoleRequestButton.Parent = ScreenGui
+
+RoleRequestButton.MouseButton1Click:Connect(function()
+    setupRoleRequest()
+end)
 
 -- Основной цикл обновления
 RunService.RenderStepped:Connect(function()
@@ -635,4 +703,4 @@ print("✅ Ultimate Madder Mystery скрипт загружен")
 print("🎯 Аимбот: " .. (Settings.Enabled and "ВКЛ" or "ВЫКЛ"))
 print("🔫 Автоподбор: " .. (Settings.AutoPickup and "ВКЛ" or "ВЫКЛ"))
 print("👁️ ESP ролей: " .. (Settings.RoleESP and "ВКЛ" or "ВЫКЛ"))
-print("🚀 5 новых функций активировано!")
+print("🚀 7 функций активировано!")
