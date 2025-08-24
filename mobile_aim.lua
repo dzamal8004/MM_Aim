@@ -616,6 +616,126 @@ RunService.RenderStepped:Connect(function()
     updateWeaponESP()
 end)
 
+-- Скрипт для анимации падения и изменения внешнего вида
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- Конфигурация
+local FALL_ANIMATION_ENABLED = true
+local CUSTOM_SKIN_ENABLED = true
+local SKIN_COLOR = Color3.fromRGB(255, 0, 0) -- Красный цвет (можно изменить)
+
+-- Анимация падения
+local function setupFallAnimation()
+    if not FALL_ANIMATION_ENABLED then return end
+    
+    -- Создаем анимацию падения
+    local fallAnimation = Instance.new("Animation")
+    fallAnimation.AnimationId = "rbxassetid://3515491059" -- ID анимации падения
+    
+    local fallTrack = Humanoid:LoadAnimation(fallAnimation)
+    
+    -- Функция для определения, стоит ли персонаж
+    local function isStanding()
+        return Humanoid.MoveDirection.Magnitude < 0.1 and Humanoid.FloorMaterial ~= Enum.Material.Air
+    end
+    
+    -- Проверяем состояние каждые 0.1 секунды
+    while true do
+        if isStanding() then
+            fallTrack:Play()
+            -- Добавляем небольшую задержку для реалистичности
+            wait(math.random(0.5, 2.0))
+        else
+            fallTrack:Stop()
+        end
+        wait(0.1)
+    end
+end
+
+-- Изменение внешнего вида (скин)
+local function applyCustomSkin()
+    if not CUSTOM_SKIN_ENABLED then return end
+    
+    -- Ждем полной загрузки персонажа
+    Character:WaitForChild("Body Colors")
+    
+    -- Изменяем цвет тела
+    local bodyColors = Character:FindFirstChild("Body Colors")
+    if bodyColors then
+        bodyColors.HeadColor3 = SKIN_COLOR
+        bodyColors.LeftArmColor3 = SKIN_COLOR
+        bodyColors.RightArmColor3 = SKIN_COLOR
+        bodyColors.LeftLegColor3 = SKIN_COLOR
+        bodyColors.RightLegColor3 = SKIN_COLOR
+        bodyColors.TorsoColor3 = SKIN_COLOR
+    end
+    
+    -- Создаем специальный материал для эффекта
+    for _, part in ipairs(Character:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            part.Material = Enum.Material.Neon
+            part.BrickColor = BrickColor.new(SKIN_COLOR)
+        end
+    end
+    
+    -- Создаем свечение
+    local glow = Instance.new("SurfaceLight")
+    glow.Brightness = 5
+    glow.Range = 10
+    glow.Color = SKIN_COLOR
+    glow.Parent = HumanoidRootPart
+end
+
+-- Функция для синхронизации скина с другими игроками
+local function syncSkinWithOtherPlayers()
+    if not CUSTOM_SKIN_ENABLED then return end
+    
+    -- Создаем удаленное событие для синхронизации
+    local skinSyncEvent = Instance.new("RemoteEvent")
+    skinSyncEvent.Name = "SkinSyncEvent"
+    skinSyncEvent.Parent = ReplicatedStorage
+    
+    -- Отправляем наш скин другим игрокам
+    skinSyncEvent.OnServerEvent:Connect(function(player, skinData)
+        if player ~= LocalPlayer then
+            -- Применяем полученные данные о скине к нашему персонажу
+            for partName, color in pairs(skinData) do
+                local part = Character:FindFirstChild(partName)
+                if part and part:IsA("BasePart") then
+                    part.BrickColor = BrickColor.new(color)
+                end
+            end
+        end
+    end)
+    
+    -- Подготавливаем данные о нашем скине
+    local skinData = {}
+    for _, part in ipairs(Character:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            skinData[part.Name] = part.BrickColor
+        end
+    end
+    
+    -- Отправляем данные всем игрокам
+    skinSyncEvent:FireAllClients(skinData)
+end
+
+-- Запускаем все функции
+spawn(setupFallAnimation)
+spawn(applyCustomSkin)
+spawn(syncSkinWithOtherPlayers)
+
+print("✅ Анимация падения и кастомный скин активированы!")
+print("🎨 Цвет скина: " .. tostring(SKIN_COLOR))
+print("🤸 Анимация падения: " .. tostring(FALL_ANIMATION_ENABLED))
 showNotification("✅ Часть 2/2 загружена! Все функции активированы.", 5)
 
 print("✅ Часть 2/2 загружена - Дополнительные функции")
