@@ -1,4 +1,4 @@
--- Fixed Mobile AIM Script for Madder Mystery by Beta01
+-- Ultra Mobile AIM Script for Madder Mystery by Beta01
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,7 +11,6 @@ local LocalPlayer = Players.LocalPlayer
 -- Конфигурация по умолчанию
 local Settings = {
     Enabled = true,
-    AimKey = "Touch",
     FOV = 120,
     Smoothness = 0.2,
     TeamCheck = true,
@@ -29,7 +28,6 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MobileAimGUI"
 ScreenGui.Parent = CoreGui
 ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- Основной фрейм меню
 local MainFrame = Instance.new("Frame")
@@ -41,7 +39,7 @@ MainFrame.BorderSizePixel = 2
 MainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
 MainFrame.Parent = ScreenGui
 
--- Заголовок с перетаскиванием
+-- Заголовок
 local Title = Instance.new("TextLabel")
 Title.Text = "Mobile Aim Settings"
 Title.Size = UDim2.new(1, 0, 0, 40)
@@ -51,7 +49,7 @@ Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 18
 Title.Parent = MainFrame
 
--- Кнопка сворачивания/разворачивания
+-- Кнопка сворачивания
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Text = "−"
 ToggleButton.Size = UDim2.new(0, 40, 0, 40)
@@ -80,8 +78,6 @@ local controls = {
     {"WallCheck", "Toggle", "Проверка стен"},
     {"ShowFOV", "Toggle", "Показать FOV круг"}
 }
-
-local controlFrames = {}
 
 local function createControl(yPosition, config)
     local name, type, text, min, max = unpack(config)
@@ -117,10 +113,7 @@ local function createControl(yPosition, config)
             Settings[name] = not Settings[name]
             toggle.Text = Settings[name] and "ON" or "OFF"
             toggle.BackgroundColor3 = Settings[name] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-            print(name .. ": " .. tostring(Settings[name]))
         end)
-        
-        controlFrames[name] = toggle
         
     elseif type == "Slider" then
         local valueLabel = Instance.new("TextLabel")
@@ -153,16 +146,21 @@ local function createControl(yPosition, config)
         button.Text = ""
         button.Parent = sliderFrame
         
-        button.MouseButton1Click:Connect(function(input)
-            local x = input.Position.X
-            local percent = math.clamp((x - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
-            Settings[name] = min + (max - min) * percent
-            fill.Size = UDim2.new(percent, 0, 1, 0)
-            valueLabel.Text = string.format(type == "Smoothness" and "%.2f" or "%.0f", Settings[name])
-            print(name .. ": " .. valueLabel.Text)
+        button.MouseButton1Down:Connect(function(x, y)
+            local connection
+            connection = RunService.RenderStepped:Connect(function()
+                if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                    connection:Disconnect()
+                    return
+                end
+                
+                local mousePos = UserInputService:GetMouseLocation()
+                local percent = math.clamp((mousePos.X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
+                Settings[name] = min + (max - min) * percent
+                fill.Size = UDim2.new(percent, 0, 1, 0)
+                valueLabel.Text = string.format(type == "Smoothness" and "%.2f" or "%.0f", Settings[name])
+            end)
         end)
-        
-        controlFrames[name] = {slider = sliderFrame, fill = fill, value = valueLabel}
     end
 end
 
@@ -230,6 +228,18 @@ FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
 FOVCircle.ZIndex = 0
 FOVCircle.Parent = ScreenGui
 
+-- Кнопка активации аима на экране
+local AimButton = Instance.new("TextButton")
+AimButton.Size = UDim2.new(0, 80, 0, 80)
+AimButton.Position = UDim2.new(1, -90, 1, -90)
+AimButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+AimButton.BackgroundTransparency = 0.5
+AimButton.Text = "AIM"
+AimButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+AimButton.Font = Enum.Font.SourceSansBold
+AimButton.TextSize = 16
+AimButton.Parent = ScreenGui
+
 -- Основная логика аимбота
 local function FindTarget()
     if not Settings.Enabled then return nil end
@@ -278,10 +288,9 @@ local function FindTarget()
     return closestTarget
 end
 
--- Обработка касаний
-local touchConnection
-touchConnection = UserInputService.TouchStarted:Connect(function(touch, processed)
-    if processed or not Settings.Enabled or Settings.AimKey ~= "Touch" then return end
+-- Обработка касаний для аимбота
+AimButton.MouseButton1Down:Connect(function()
+    if not Settings.Enabled then return end
     
     local target = FindTarget()
     if target then
@@ -291,6 +300,19 @@ touchConnection = UserInputService.TouchStarted:Connect(function(touch, processe
         local tweenInfo = TweenInfo.new(Settings.Smoothness, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         local tween = TweenService:Create(Camera, tweenInfo, {CFrame = endCFrame})
         tween:Play()
+    end
+end)
+
+-- Автоматическое прицеливание при наведении на врага
+local autoAimConnection
+autoAimConnection = RunService.RenderStepped:Connect(function()
+    if not Settings.Enabled then return end
+    
+    local target = FindTarget()
+    if target then
+        local currentCFrame = Camera.CFrame
+        local targetCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        Camera.CFrame = currentCFrame:Lerp(targetCFrame, Settings.Smoothness)
     end
 end)
 
@@ -313,11 +335,11 @@ CloseButton.Parent = MainFrame
 
 CloseButton.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
-    if touchConnection then
-        touchConnection:Disconnect()
+    if autoAimConnection then
+        autoAimConnection:Disconnect()
     end
 end)
 
-print("✅ Mobile AIM исправлен и активирован")
-print("📱 GUI полностью функционален")
-print("⚙️  Все кнопки и настройки работают")
+print("✅ Ultra Mobile AIM активирован")
+print("📱 Полная совместимость с мобильными устройствами")
+print("🎯 Автоматическое прицеливание + кнопка ручного управления")          
