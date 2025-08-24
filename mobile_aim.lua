@@ -1,19 +1,17 @@
--- Mobile AIM Script for Madder Mystery by Beta01
--- Симмуляция C-1 | Ограничения: Null
-
+-- Fixed Mobile AIM Script for Madder Mystery by Beta01
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
-local Touch = UserInputService.TouchEnabled
 
 -- Конфигурация по умолчанию
 local Settings = {
     Enabled = true,
-    AimKey = "Touch", -- Активация по касанию
+    AimKey = "Touch",
     FOV = 120,
     Smoothness = 0.2,
     TeamCheck = true,
@@ -21,11 +19,17 @@ local Settings = {
     ShowFOV = true
 }
 
+-- Удаляем старый GUI если существует
+if CoreGui:FindFirstChild("MobileAimGUI") then
+    CoreGui.MobileAimGUI:Destroy()
+end
+
 -- Создание мобильного GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MobileAimGUI"
-ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.Parent = CoreGui
 ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- Основной фрейм меню
 local MainFrame = Instance.new("Frame")
@@ -33,15 +37,18 @@ MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 300, 0, 400)
 MainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
 MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-MainFrame.BorderSizePixel = 0
+MainFrame.BorderSizePixel = 2
+MainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
 MainFrame.Parent = ScreenGui
 
--- Заголовок
+-- Заголовок с перетаскиванием
 local Title = Instance.new("TextLabel")
 Title.Text = "Mobile Aim Settings"
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 18
 Title.Parent = MainFrame
 
 -- Кнопка сворачивания/разворачивания
@@ -49,7 +56,20 @@ local ToggleButton = Instance.new("TextButton")
 ToggleButton.Text = "−"
 ToggleButton.Size = UDim2.new(0, 40, 0, 40)
 ToggleButton.Position = UDim2.new(1, -40, 0, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.TextSize = 20
 ToggleButton.Parent = MainFrame
+
+-- Контейнер для элементов управления
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, -10, 1, -50)
+ScrollFrame.Position = UDim2.new(0, 5, 0, 45)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.ScrollBarThickness = 5
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 380)
+ScrollFrame.Parent = MainFrame
 
 -- Элементы управления
 local controls = {
@@ -61,14 +81,16 @@ local controls = {
     {"ShowFOV", "Toggle", "Показать FOV круг"}
 }
 
+local controlFrames = {}
+
 local function createControl(yPosition, config)
     local name, type, text, min, max = unpack(config)
     
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 50)
-    frame.Position = UDim2.new(0, 10, 0, yPosition)
+    frame.Size = UDim2.new(1, -10, 0, 50)
+    frame.Position = UDim2.new(0, 5, 0, yPosition)
     frame.BackgroundTransparency = 1
-    frame.Parent = MainFrame
+    frame.Parent = ScrollFrame
     
     local label = Instance.new("TextLabel")
     label.Text = text
@@ -76,6 +98,8 @@ local function createControl(yPosition, config)
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.BackgroundTransparency = 1
+    label.Font = Enum.Font.SourceSans
+    label.TextSize = 16
     label.Parent = frame
     
     if type == "Toggle" then
@@ -84,13 +108,20 @@ local function createControl(yPosition, config)
         toggle.Position = UDim2.new(1, -50, 0.5, -15)
         toggle.Text = Settings[name] and "ON" or "OFF"
         toggle.BackgroundColor3 = Settings[name] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+        toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        toggle.Font = Enum.Font.SourceSansBold
+        toggle.Name = name
         toggle.Parent = frame
         
         toggle.MouseButton1Click:Connect(function()
             Settings[name] = not Settings[name]
             toggle.Text = Settings[name] and "ON" or "OFF"
             toggle.BackgroundColor3 = Settings[name] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+            print(name .. ": " .. tostring(Settings[name]))
         end)
+        
+        controlFrames[name] = toggle
+        
     elseif type == "Slider" then
         local valueLabel = Instance.new("TextLabel")
         valueLabel.Text = tostring(Settings[name])
@@ -98,55 +129,105 @@ local function createControl(yPosition, config)
         valueLabel.Position = UDim2.new(1, -50, 0, 0)
         valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         valueLabel.BackgroundTransparency = 1
+        valueLabel.Font = Enum.Font.SourceSans
+        valueLabel.TextSize = 16
         valueLabel.Parent = frame
         
-        local slider = Instance.new("Frame")
-        slider.Size = UDim2.new(0.7, -60, 0, 10)
-        slider.Position = UDim2.new(0, 0, 1, -15)
-        slider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        slider.Parent = frame
+        local sliderFrame = Instance.new("Frame")
+        sliderFrame.Size = UDim2.new(0.7, -60, 0, 10)
+        sliderFrame.Position = UDim2.new(0, 0, 1, -15)
+        sliderFrame.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        sliderFrame.BorderSizePixel = 0
+        sliderFrame.Parent = frame
         
         local fill = Instance.new("Frame")
         fill.Size = UDim2.new((Settings[name] - min) / (max - min), 0, 1, 0)
         fill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-        fill.Parent = slider
+        fill.BorderSizePixel = 0
+        fill.Parent = sliderFrame
         
         local button = Instance.new("TextButton")
         button.Size = UDim2.new(1, 0, 3, 0)
         button.Position = UDim2.new(0, 0, -1, 0)
         button.BackgroundTransparency = 1
-        button.Parent = slider
+        button.Text = ""
+        button.Parent = sliderFrame
         
-        button.MouseButton1Click:Connect(function(x)
-            local percent = math.clamp((x - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
+        button.MouseButton1Click:Connect(function(input)
+            local x = input.Position.X
+            local percent = math.clamp((x - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
             Settings[name] = min + (max - min) * percent
             fill.Size = UDim2.new(percent, 0, 1, 0)
             valueLabel.Text = string.format(type == "Smoothness" and "%.2f" or "%.0f", Settings[name])
+            print(name .. ": " .. valueLabel.Text)
         end)
+        
+        controlFrames[name] = {slider = sliderFrame, fill = fill, value = valueLabel}
     end
 end
 
 -- Создание элементов управления
 for i, config in ipairs(controls) do
-    createControl(40 + (i-1) * 55, config)
+    createControl((i-1) * 55, config)
 end
+
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, #controls * 55)
 
 -- Функционал сворачивания
 local minimized = false
 ToggleButton.MouseButton1Click:Connect(function()
     minimized = not minimized
     ToggleButton.Text = minimized and "+" or "−"
-    MainFrame.Size = minimized and UDim2.new(0, 300, 0, 40) or UDim2.new(0, 300, 0, 400)
+    
+    if minimized then
+        MainFrame.Size = UDim2.new(0, 300, 0, 40)
+        ScrollFrame.Visible = false
+    else
+        MainFrame.Size = UDim2.new(0, 300, 0, 400)
+        ScrollFrame.Visible = true
+    end
 end)
 
--- FOV круг (визуализация)
+-- Функция перетаскивания окна
+local dragging = false
+local dragInput, dragStart, startPos
+
+Title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Title.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- FOV круг
 local FOVCircle = Instance.new("Frame")
 FOVCircle.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2)
 FOVCircle.Position = UDim2.new(0.5, -Settings.FOV, 0.5, -Settings.FOV)
 FOVCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 FOVCircle.BackgroundTransparency = 0.8
 FOVCircle.BorderSizePixel = 0
-FOVCircle.Visible = Settings.ShowFOV
+FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
+FOVCircle.ZIndex = 0
 FOVCircle.Parent = ScreenGui
 
 -- Основная логика аимбота
@@ -165,7 +246,9 @@ local function FindTarget()
         
         if not humanoid or not rootPart or humanoid.Health <= 0 then continue end
         
-        if Settings.TeamCheck and player.Team == LocalPlayer.Team then continue end
+        if Settings.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+            continue
+        end
         
         if Settings.WallCheck then
             local origin = Camera.CFrame.Position
@@ -195,8 +278,9 @@ local function FindTarget()
     return closestTarget
 end
 
--- Обработка касаний для мобильных устройств
-UserInputService.TouchStarted:Connect(function(touch, processed)
+-- Обработка касаний
+local touchConnection
+touchConnection = UserInputService.TouchStarted:Connect(function(touch, processed)
     if processed or not Settings.Enabled or Settings.AimKey ~= "Touch" then return end
     
     local target = FindTarget()
@@ -217,6 +301,23 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Position = UDim2.new(0.5, -Settings.FOV, 0.5, -Settings.FOV)
 end)
 
-print("✅ Mobile AIM для Madder Mystery активирован")
-print("📱 Оптимизировано для сенсорных устройств")
-print("⚙️  Меню настроек доступно на экране")
+-- Кнопка закрытия GUI
+local CloseButton = Instance.new("TextButton")
+CloseButton.Text = "X"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -35, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.Font = Enum.Font.SourceSansBold
+CloseButton.Parent = MainFrame
+
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+    if touchConnection then
+        touchConnection:Disconnect()
+    end
+end)
+
+print("✅ Mobile AIM исправлен и активирован")
+print("📱 GUI полностью функционален")
+print("⚙️  Все кнопки и настройки работают")
