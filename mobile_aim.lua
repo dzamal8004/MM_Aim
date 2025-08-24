@@ -1,4 +1,4 @@
--- ULTIMATE MADDER MYSTERY SCRIPT WITH ADVANCED FEATURES
+-- ULTIMATE MADDER MYSTERY SCRIPT WITH AUTO-SHOOT
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -28,8 +28,10 @@ local Settings = {
     SpeedBoost = false,
     NoClip = false,
     VisionBoost = false,
-    AutoTeleportToGun = false, -- Автотелепорт к оружию
-    RoleRequest = false -- Запрос роли
+    AutoTeleportToGun = false,
+    RoleRequest = false,
+    AutoShoot = false, -- Автоматическая стрельба
+    AutoThrow = false -- Автоматическое метание ножа
 }
 
 -- Очистка предыдущего GUI
@@ -58,8 +60,8 @@ ToggleIcon.Parent = ScreenGui
 -- Основное меню
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 320, 0, 550)
-MainFrame.Position = UDim2.new(0.5, -160, 0.5, -275)
+MainFrame.Size = UDim2.new(0, 320, 0, 600)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -300)
 MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 MainFrame.BorderSizePixel = 2
 MainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
@@ -82,7 +84,7 @@ ScrollFrame.Size = UDim2.new(1, -10, 1, -50)
 ScrollFrame.Position = UDim2.new(0, 5, 0, 45)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.ScrollBarThickness = 5
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 650)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 700)
 ScrollFrame.Parent = MainFrame
 
 -- Настройки
@@ -103,7 +105,9 @@ local controls = {
     {"NoClip", "Toggle", "Режим NoClip"},
     {"VisionBoost", "Toggle", "Улучшенное зрение"},
     {"AutoTeleportToGun", "Toggle", "Автотелепорт к оружию"},
-    {"RoleRequest", "Toggle", "Запрос роли в следующей игре"}
+    {"RoleRequest", "Toggle", "Запрос роли в следующей игре"},
+    {"AutoShoot", "Toggle", "Авто-стрельба (пистолет)"},
+    {"AutoThrow", "Toggle", "Авто-метание (нож)"}
 }
 
 -- Функция создания элементов управления
@@ -647,10 +651,78 @@ local function setupRoleRequest()
     end
 end
 
+-- 8. АВТОМАТИЧЕСКАЯ СТРЕЛЬБА И МЕТАНИЕ НОЖА
+local function setupAutoShoot()
+    while true do
+        if (Settings.AutoShoot or Settings.AutoThrow) and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local target = FindTarget()
+            if target then
+                -- Определяем текущее оружие
+                local gun = LocalPlayer.Character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
+                local knife = LocalPlayer.Character:FindFirstChild("Knife") or LocalPlayer.Backpack:FindFirstChild("Knife")
+                
+                -- Автоматическая стрельба из пистолета
+                if Settings.AutoShoot and gun then
+                    -- Экипируем пистолет
+                    if gun.Parent ~= LocalPlayer.Character then
+                        gun.Parent = LocalPlayer.Character
+                        wait(0.1)
+                    end
+                    
+                    -- Имитируем выстрел
+                    local args = {
+                        [1] = target.Position,
+                        [2] = target
+                    }
+                    
+                    -- Пытаемся найти функцию выстрела
+                    if gun:FindFirstChild("Shoot") then
+                        gun.Shoot:FireServer(unpack(args))
+                    elseif gun:FindFirstChild("Fire") then
+                        gun.Fire:FireServer(unpack(args))
+                    elseif gun:FindFirstChild("Activate") then
+                        gun.Activate:FireServer(unpack(args))
+                    end
+                    
+                    wait(0.5) -- Задержка между выстрелами
+                end
+                
+                -- Автоматическое метание ножа
+                if Settings.AutoThrow and knife then
+                    -- Экипируем нож
+                    if knife.Parent ~= LocalPlayer.Character then
+                        knife.Parent = LocalPlayer.Character
+                        wait(0.1)
+                    end
+                    
+                    -- Имитируем метание
+                    local args = {
+                        [1] = target.Position,
+                        [2] = target
+                    }
+                    
+                    -- Пытаемся найти функцию метания
+                    if knife:FindFirstChild("Throw") then
+                        knife.Throw:FireServer(unpack(args))
+                    elseif knife:FindFirstChild("Fire") then
+                        knife.Fire:FireServer(unpack(args))
+                    elseif knife:FindFirstChild("Activate") then
+                        knife.Activate:FireServer(unpack(args))
+                    end
+                    
+                    wait(1) -- Задержка между бросками
+                end
+            end
+        end
+        wait(0.1)
+    end
+end
+
 -- Запускаем все системы
 spawn(setupMurdererAlert)
 spawn(setupSheriffHelper)
 spawn(setupAutoTeleportToGun)
+spawn(setupAutoShoot)
 
 -- Кнопка для запроса роли
 local RoleRequestButton = Instance.new("TextButton")
@@ -666,6 +738,75 @@ RoleRequestButton.Parent = ScreenGui
 
 RoleRequestButton.MouseButton1Click:Connect(function()
     setupRoleRequest()
+end)
+
+-- Кнопка для ручной стрельбы/метания
+local ManualShootButton = Instance.new("TextButton")
+ManualShootButton.Text = "🔫"
+ManualShootButton.Size = UDim2.new(0, 50, 0, 50)
+ManualShootButton.Position = UDim2.new(0, 130, 0, 10)
+ManualShootButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ManualShootButton.BackgroundTransparency = 0.5
+ManualShootButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ManualShootButton.Font = Enum.Font.SourceSansBold
+ManualShootButton.TextSize = 24
+ManualShootButton.Parent = ScreenGui
+
+ManualShootButton.MouseButton1Click:Connect(function()
+    local target = FindTarget()
+    if target then
+        -- Определяем текущее оружие
+        local gun = LocalPlayer.Character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
+        local knife = LocalPlayer.Character:FindFirstChild("Knife") or LocalPlayer.Backpack:FindFirstChild("Knife")
+        
+        -- Стрельба из пистолета
+        if gun then
+            -- Экипируем пистолет
+            if gun.Parent ~= LocalPlayer.Character then
+                gun.Parent = LocalPlayer.Character
+                wait(0.1)
+            end
+            
+            -- Имитируем выстрел
+            local args = {
+                [1] = target.Position,
+                [2] = target
+            }
+            
+            -- Пытаемся найти функцию выстрела
+            if gun:FindFirstChild("Shoot") then
+                gun.Shoot:FireServer(unpack(args))
+            elseif gun:FindFirstChild("Fire") then
+                gun.Fire:FireServer(unpack(args))
+            elseif gun:FindFirstChild("Activate") then
+                gun.Activate:FireServer(unpack(args))
+            end
+        end
+        
+        -- Метание ножа
+        if knife then
+            -- Экипируем нож
+            if knife.Parent ~= LocalPlayer.Character then
+                knife.Parent = LocalPlayer.Character
+                wait(0.1)
+            end
+            
+            -- Имитируем метание
+            local args = {
+                [1] = target.Position,
+                [2] = target
+            }
+            
+            -- Пытаемся найти функцию метания
+            if knife:FindFirstChild("Throw") then
+                knife.Throw:FireServer(unpack(args))
+            elseif knife:FindFirstChild("Fire") then
+                knife.Fire:FireServer(unpack(args))
+            elseif knife:FindFirstChild("Activate") then
+                knife.Activate:FireServer(unpack(args))
+            end
+        end
+    end
 end)
 
 -- Основной цикл обновления
@@ -701,6 +842,7 @@ game:GetService("Debris"):AddItem(notif, 5)
 
 print("✅ Ultimate Madder Mystery скрипт загружен")
 print("🎯 Аимбот: " .. (Settings.Enabled and "ВКЛ" or "ВЫКЛ"))
-print("🔫 Автоподбор: " .. (Settings.AutoPickup and "ВКЛ" or "ВЫКЛ"))
+print("🔫 Авто-стрельба: " .. (Settings.AutoShoot and "ВКЛ" or "ВЫКЛ"))
+print("🔪 Авто-метание: " .. (Settings.AutoThrow and "ВКЛ" or "ВЫКЛ"))
 print("👁️ ESP ролей: " .. (Settings.RoleESP and "ВКЛ" or "ВЫКЛ"))
-print("🚀 7 функций активировано!")
+print("🚀 8 функций активировано!")
