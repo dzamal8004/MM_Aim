@@ -1,84 +1,98 @@
--- AIM Script for Madder Mystery by Beta01 (Delta-based)
--- Симуляция C-1 | Ограничения: Null
+-- AIM Script for Madder Mystery by Beta01 (Delta Calculations)
+-- Симмуляция C-1 | Ограничения: Null
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local CurrentCamera = workspace.CurrentCamera
+local Camera = workspace.CurrentCamera
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
--- Настройки
-local AimKey = Enum.UserInputType.MouseButton2 -- Правая кнопка мыши для прицеливания
-local FOV = 100 -- Радиус зоны захвата в пикселях
-local TeamCheck = true -- Проверять команду?
-local WallCheck = true -- Проверять стены?
-local Smoothness = 0.1 -- Плавность прицеливания (0 - мгновенно, 1 - очень плавно)
+-- Конфигурационные параметры
+local AimKey = Enum.UserInputType.MouseButton2
+local FOV = 90 -- Поле захвата цели в пикселях
+local Smoothness = 0.15 -- Плавность прицеливания (0-1)
+local TeamCheck = true -- Игнорировать союзников
+local VisibilityCheck = true -- Проверка видимости через стены
 
--- Функция получения ближайшего игрока к курсору
-function GetClosestPlayerToCursor()
-    local ClosestPlayer = nil
-    local ShortestDistance = FOV
+-- Функция вычисления дельты и поиска цели
+function FindTarget()
+    local closestTarget = nil
+    local shortestDelta = FOV
 
-    for _, Player in ipairs(Players:GetPlayers()) do
-        if Player ~= LocalPlayer and Player.Character and Player.Character:FindFirstChild("Humanoid") and Player.Character.Humanoid.Health > 0 and Player.Character:FindFirstChild("HumanoidRootPart") then
-            if TeamCheck and Player.Team and LocalPlayer.Team and Player.Team == LocalPlayer.Team then
-                continue -- Пропускаем своих
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if not player.Character then continue end
+        
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        
+        if not humanoid or not rootPart or humanoid.Health <= 0 then continue end
+        
+        -- Проверка команды
+        if TeamCheck and player.Team == LocalPlayer.Team then continue end
+        
+        -- Проверка видимости
+        if VisibilityCheck then
+            local origin = Camera.CFrame.Position
+            local direction = (rootPart.Position - origin).Unit * 1000
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+            local result = workspace:Raycast(origin, direction, raycastParams)
+            
+            if result and result.Instance:FindFirstAncestor(player.Name) == nil then
+                continue
             end
+        end
 
-            local Character = Player.Character
-            local HumanoidRootPart = Character.HumanoidRootPart
-
-            -- Проверка на видимость (WallCheck)
-            if WallCheck then
-                local Origin = CurrentCamera.CFrame.Position
-                local Destination = HumanoidRootPart.Position
-                local RaycastParams = RaycastParams.new()
-                RaycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-                RaycastParams.FilterDescendantsInstances = {LocalPlayer.Character, CurrentCamera}
-                local RaycastResult = workspace:Raycast(Origin, (Destination - Origin), RaycastParams)
-
-                if RaycastResult and RaycastResult.Instance:FindFirstAncestorWhichIsA("Model") ~= Character then
-                    continue -- Цель не видна, пропускаем
-                end
-            end
-
-            -- Преобразуем мировые координаты в экранные
-            local ScreenPoint, IsVisible = CurrentCamera:WorldToViewportPoint(HumanoidRootPart.Position)
-            if IsVisible then
-                -- Вычисляем дельту (расстояние от курсора до цели на экране)
-                local Delta = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(ScreenPoint.X, ScreenPoint.Y)).Magnitude
-
-                if Delta < ShortestDistance then
-                    ShortestDistance = Delta
-                    ClosestPlayer = Player
-                end
+        -- Вычисление дельты позиции
+        local screenPosition, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+        if onScreen then
+            local delta = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPosition.X, screenPosition.Y)).Magnitude
+            
+            if delta < shortestDelta then
+                shortestDelta = delta
+                closestTarget = rootPart
             end
         end
     end
-    return ClosestPlayer
+    
+    return closestTarget
 end
 
--- Основной цикл прицеливания
-UserInputService.InputBegan:Connect(function(Input, GameProcessed)
-    if GameProcessed then return end
+-- Основная функция прицеливания
+local function AimAtTarget(target)
+    if not target then return end
+    
+    local currentCamera = Camera
+    local targetPosition = target.Position
+    
+    -- Плавное прицеливание с использованием дельта-интерполяции
+    local startPosition = currentCamera.CFrame
+    local endPosition = CFrame.new(currentCamera.CFrame.Position, targetPosition)
+    
+    local step = 0
+    while step < 1 and target and target.Parent do
+        step = step + (1 - Smoothness) * 0.1
+        Camera.CFrame = startPosition:Lerp(endPosition, step)
+        RunService.RenderStepped:Wait()
+    end
+end
 
-    if Input.UserInputType == AimKey then
-        local Target = GetClosestPlayerToCursor()
-        if Target and Target.Character and Target.Character:FindFirstChild("HumanoidRootPart") then
-            local TargetRoot = Target.Character.HumanoidRootPart
-            -- Захватываем цель и начинаем прицеливание
-            while UserInputService:IsMouseButtonPressed(AimKey) and Target and Target.Character and Target.Character.Humanoid.Health > 0 do
-                RunService.RenderStepped:Wait()
-                local CurrentCFrame = CurrentCamera.CFrame
-                local TargetPosition = TargetRoot.Position
-                -- Плавное прицеливание с использованием Lerp
-                local NewCFrame = CFrame.new(CurrentCFrame.Position, TargetPosition)
-                CurrentCamera.CFrame = CurrentCFrame:Lerp(NewCFrame, 1 - Smoothness)
-            end
+-- Обработчик ввода
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.UserInputType == AimKey then
+        local target = FindTarget()
+        if target then
+            AimAtTarget(target)
         end
     end
 end)
 
-print("AIMBOT [Madder Mystery] активирован. Ключ: Правая Кнопка Мыши.")
+print("✅ Delta-AIM для Madder Mystery активирован")
+print("🎯 Клавиша прицеливания: Правая кнопка мыши")
+print("📊 FOV: " .. FOV .. "px | Smoothness: " Smoothness)
