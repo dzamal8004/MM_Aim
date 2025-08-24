@@ -616,11 +616,12 @@ RunService.RenderStepped:Connect(function()
     updateWeaponESP()
 end)
 
--- Скрипт для анимации падения и изменения внешнего вида
+-- Скрипт с кнопкой для анимации падения и изменения скина
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -628,9 +629,26 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Конфигурация
-local FALL_ANIMATION_ENABLED = true
-local CUSTOM_SKIN_ENABLED = true
-local SKIN_COLOR = Color3.fromRGB(255, 0, 0) -- Красный цвет (можно изменить)
+local FALL_ANIMATION_ENABLED = false
+local CUSTOM_SKIN_ENABLED = false
+local SKIN_COLOR = Color3.fromRGB(255, 0, 0) -- Красный цвет
+
+-- Создаем GUI с кнопкой
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AnimationControlGUI"
+screenGui.Parent = CoreGui
+screenGui.ResetOnSpawn = false
+
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(0, 150, 0, 50)
+button.Position = UDim2.new(0, 20, 0, 20)
+button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+button.BorderSizePixel = 0
+button.Text = "Включить анимацию"
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.Font = Enum.Font.SourceSansBold
+button.TextSize = 16
+button.Parent = screenGui
 
 -- Анимация падения
 local function setupFallAnimation()
@@ -648,7 +666,7 @@ local function setupFallAnimation()
     end
     
     -- Проверяем состояние каждые 0.1 секунды
-    while true do
+    while FALL_ANIMATION_ENABLED do
         if isStanding() then
             fallTrack:Play()
             -- Добавляем небольшую задержку для реалистичности
@@ -658,9 +676,11 @@ local function setupFallAnimation()
         end
         wait(0.1)
     end
+    
+    fallTrack:Stop() -- Останавливаем анимацию при выключении
 end
 
--- Изменение внешнего вида (скин)
+-- Изменение внешнего вида (скина)
 local function applyCustomSkin()
     if not CUSTOM_SKIN_ENABLED then return end
     
@@ -694,48 +714,68 @@ local function applyCustomSkin()
     glow.Parent = HumanoidRootPart
 end
 
--- Функция для синхронизации скина с другими игроками
-local function syncSkinWithOtherPlayers()
-    if not CUSTOM_SKIN_ENABLED then return end
-    
-    -- Создаем удаленное событие для синхронизации
-    local skinSyncEvent = Instance.new("RemoteEvent")
-    skinSyncEvent.Name = "SkinSyncEvent"
-    skinSyncEvent.Parent = ReplicatedStorage
-    
-    -- Отправляем наш скин другим игрокам
-    skinSyncEvent.OnServerEvent:Connect(function(player, skinData)
-        if player ~= LocalPlayer then
-            -- Применяем полученные данные о скине к нашему персонажу
-            for partName, color in pairs(skinData) do
-                local part = Character:FindFirstChild(partName)
-                if part and part:IsA("BasePart") then
-                    part.BrickColor = BrickColor.new(color)
-                end
-            end
-        end
-    end)
-    
-    -- Подготавливаем данные о нашем скине
-    local skinData = {}
+-- Функция для восстановления оригинального скина
+local function restoreOriginalSkin()
+    -- Восстанавливаем стандартный материал
     for _, part in ipairs(Character:GetDescendants()) do
         if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            skinData[part.Name] = part.BrickColor
+            part.Material = Enum.Material.Plastic
+            part.BrickColor = BrickColor.new("Medium stone grey") -- Стандартный цвет
         end
     end
     
-    -- Отправляем данные всем игрокам
-    skinSyncEvent:FireAllClients(skinData)
+    -- Удаляем свечение
+    if HumanoidRootPart:FindFirstChildWhichIsA("SurfaceLight") then
+        HumanoidRootPart:FindFirstChildWhichIsA("SurfaceLight"):Destroy()
+    end
+    
+    -- Восстанавливаем стандартные цвета тела
+    local bodyColors = Character:FindFirstChild("Body Colors")
+    if bodyColors then
+        bodyColors.HeadColor3 = Color3.fromRGB(239, 239, 239)
+        bodyColors.LeftArmColor3 = Color3.fromRGB(239, 239, 239)
+        bodyColors.RightArmColor3 = Color3.fromRGB(239, 239, 239)
+        bodyColors.LeftLegColor3 = Color3.fromRGB(239, 239, 239)
+        bodyColors.RightLegColor3 = Color3.fromRGB(239, 239, 239)
+        bodyColors.TorsoColor3 = Color3.fromRGB(239, 239, 239)
+    end
 end
 
--- Запускаем все функции
-spawn(setupFallAnimation)
-spawn(applyCustomSkin)
-spawn(syncSkinWithOtherPlayers)
+-- Обработчик нажатия кнопки
+button.MouseButton1Click:Connect(function()
+    FALL_ANIMATION_ENABLED = not FALL_ANIMATION_ENABLED
+    CUSTOM_SKIN_ENABLED = not CUSTOM_SKIN_ENABLED
+    
+    if FALL_ANIMATION_ENABLED then
+        button.Text = "Выключить анимацию"
+        button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        applyCustomSkin()
+        spawn(setupFallAnimation)
+    else
+        button.Text = "Включить анимацию"
+        button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        restoreOriginalSkin()
+    end
+end)
 
-print("✅ Анимация падения и кастомный скин активированы!")
-print("🎨 Цвет скина: " .. tostring(SKIN_COLOR))
-print("🤸 Анимация падения: " .. tostring(FALL_ANIMATION_ENABLED))
+-- Обработчик изменения персонажа
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    Character = newCharacter
+    Humanoid = Character:WaitForChild("Humanoid")
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+    
+    -- Применяем изменения, если они активны
+    if CUSTOM_SKIN_ENABLED then
+        applyCustomSkin()
+    end
+    
+    if FALL_ANIMATION_ENABLED then
+        spawn(setupFallAnimation)
+    end
+end)
+
+print("✅ GUI с кнопкой создан!")
+print("🎮 Нажмите кнопку для включения/выключения анимации и скина")
 showNotification("✅ Часть 2/2 загружена! Все функции активированы.", 5)
 
 print("✅ Часть 2/2 загружена - Дополнительные функции")
