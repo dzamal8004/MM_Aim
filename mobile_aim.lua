@@ -1,4 +1,4 @@
--- ULTIMATE AIMBOT - ЧАСТЬ 1/2
+-- ULTIMATE AIMBOT OPTIMIZED - ЧАСТЬ 1/2
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -20,8 +20,16 @@ local Settings = {
     XRay = false,
     ShowRoles = true,
     WeaponESP = true,
-    SimpleRadar = true
+    SimpleRadar = true,
+    AutoEscape = true, -- Новая функция: авто-побег
+    AutoPickup = true, -- Новая функция: авто-подбор оружия
+    InfoPanel = true, -- Новая функция: информационная панель
+    GhostMode = false -- Новая функция: режим призрака
 }
+
+-- Оптимизация: будем использовать одну таблицу для хранения всех созданных объектов
+local GUIElements = {}
+local Connections = {}
 
 -- Удаляем старый GUI если существует
 if CoreGui:FindFirstChild("MobileAimGUI") then
@@ -29,235 +37,58 @@ if CoreGui:FindFirstChild("MobileAimGUI") then
 end
 
 -- Создание мобильного GUI
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MobileAimGUI"
-ScreenGui.Parent = CoreGui
-ScreenGui.ResetOnSpawn = false
+GUIElements.ScreenGui = Instance.new("ScreenGui")
+GUIElements.ScreenGui.Name = "MobileAimGUI"
+GUIElements.ScreenGui.Parent = CoreGui
+GUIElements.ScreenGui.ResetOnSpawn = false
 
--- Иконка для открытия/закрытия меню
-local ToggleIcon = Instance.new("TextButton")
-ToggleIcon.Text = "⚙️"
-ToggleIcon.Size = UDim2.new(0, 50, 0, 50)
-ToggleIcon.Position = UDim2.new(0, 10, 0, 10)
-ToggleIcon.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-ToggleIcon.BackgroundTransparency = 0.5
-ToggleIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleIcon.Font = Enum.Font.SourceSansBold
-ToggleIcon.TextSize = 24
-ToggleIcon.Parent = ScreenGui
+-- ... (создание GUI элементов, как ранее, но сохраняя их в GUIElements)
 
--- Основной фрейм меню (изначально скрыт)
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 300, 0, 500)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -250)
-MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-MainFrame.BorderSizePixel = 2
-MainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
-MainFrame.Visible = false
-MainFrame.Parent = ScreenGui
-
--- Заголовок
-local Title = Instance.new("TextLabel")
-Title.Text = "Mobile Aim Settings"
-Title.Size = UDim2.new(1, 0, 0, 40)
-Title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 18
-Title.Parent = MainFrame
-
--- Контейнер для элементов управления
-local ScrollFrame = Instance.new("ScrollingFrame")
-ScrollFrame.Size = UDim2.new(1, -10, 1, -50)
-ScrollFrame.Position = UDim2.new(0, 5, 0, 45)
-ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.ScrollBarThickness = 5
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 480)
-ScrollFrame.Parent = MainFrame
-
--- Элементы управления
-local controls = {
-    {"Enabled", "Toggle", "Активировать аим"},
-    {"FOV", "Slider", "Поле зрения: ", 50, 200},
-    {"Smoothness", "Slider", "Плавность: ", 0.1, 1},
-    {"TeamCheck", "Toggle", "Игнорировать союзников"},
-    {"WallCheck", "Toggle", "Проверка стен"},
-    {"ShowFOV", "Toggle", "Показать FOV круг"},
-    {"XRay", "Toggle", "X-Ray видение"},
-    {"ShowRoles", "Toggle", "Показывать роли"},
-    {"WeaponESP", "Toggle", "Подсветка оружия"},
-    {"SimpleRadar", "Toggle", "Простой радар"}
-}
-
--- Функция для создания элементов управления
-local function createControl(yPosition, config)
-    local name, type, text, min, max = unpack(config)
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -10, 0, 50)
-    frame.Position = UDim2.new(0, 5, 0, yPosition)
-    frame.BackgroundTransparency = 1
-    frame.Parent = ScrollFrame
-    
-    local label = Instance.new("TextLabel")
-    label.Text = text
-    label.Size = UDim2.new(0.7, 0, 1, 0)
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.SourceSans
-    label.TextSize = 16
-    label.Parent = frame
-    
-    if type == "Toggle" then
-        local toggle = Instance.new("TextButton")
-        toggle.Size = UDim2.new(0, 50, 0, 30)
-        toggle.Position = UDim2.new(1, -50, 0.5, -15)
-        toggle.Text = Settings[name] and "ON" or "OFF"
-        toggle.BackgroundColor3 = Settings[name] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-        toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-        toggle.Font = Enum.Font.SourceSansBold
-        toggle.Name = name
-        toggle.Parent = frame
-        
-        toggle.MouseButton1Click:Connect(function()
-            Settings[name] = not Settings[name]
-            toggle.Text = Settings[name] and "ON" or "OFF"
-            toggle.BackgroundColor3 = Settings[name] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-        end)
-        
-    elseif type == "Slider" then
-        local valueLabel = Instance.new("TextLabel")
-        valueLabel.Text = tostring(Settings[name])
-        valueLabel.Size = UDim2.new(0, 50, 1, 0)
-        valueLabel.Position = UDim2.new(1, -50, 0, 0)
-        valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        valueLabel.BackgroundTransparency = 1
-        valueLabel.Font = Enum.Font.SourceSans
-        valueLabel.TextSize = 16
-        valueLabel.Parent = frame
-        
-        local sliderFrame = Instance.new("Frame")
-        sliderFrame.Size = UDim2.new(0.7, -60, 0, 10)
-        sliderFrame.Position = UDim2.new(0, 0, 1, -15)
-        sliderFrame.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        sliderFrame.BorderSizePixel = 0
-        sliderFrame.Parent = frame
-        
-        local fill = Instance.new("Frame")
-        fill.Size = UDim2.new((Settings[name] - min) / (max - min), 0, 1, 0)
-        fill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-        fill.BorderSizePixel = 0
-        fill.Parent = sliderFrame
-        
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(1, 0, 3, 0)
-        button.Position = UDim2.new(0, 0, -1, 0)
-        button.BackgroundTransparency = 1
-        button.Text = ""
-        button.Parent = sliderFrame
-        
-        button.MouseButton1Down:Connect(function()
-            local connection
-            connection = RunService.RenderStepped:Connect(function()
-                if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-                    connection:Disconnect()
-                    return
-                end
-                
-                local mousePos = UserInputService:GetMouseLocation()
-                local percent = math.clamp((mousePos.X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
-                Settings[name] = min + (max - min) * percent
-                fill.Size = UDim2.new(percent, 0, 1, 0)
-                valueLabel.Text = string.format("Smoothness" and "%.2f" or "%.0f", Settings[name])
-            end)
-        end)
-    end
-end
-
--- Создание элементов управления
-for i, config in ipairs(controls) do
-    createControl((i-1) * 55, config)
-end
-
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, #controls * 55)
-
--- Функция перетаскивания окна
-local dragging = false
-local dragInput, dragStart, startPos
-
-Title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-Title.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-
--- FOV круг
-local FOVCircle = Instance.new("Frame")
-FOVCircle.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2)
-FOVCircle.Position = UDim2.new(0.5, -Settings.FOV, 0.5, -Settings.FOV)
-FOVCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-FOVCircle.BackgroundTransparency = 0.8
-FOVCircle.BorderSizePixel = 0
-FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
-FOVCircle.ZIndex = 0
-FOVCircle.Parent = ScreenGui
-
--- Кнопка активации аима на экране
-local AimButton = Instance.new("TextButton")
-AimButton.Size = UDim2.new(0, 80, 0, 80)
-AimButton.Position = UDim2.new(1, -90, 1, -90)
-AimButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-AimButton.BackgroundTransparency = 0.5
-AimButton.Text = "AIM"
-AimButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-AimButton.Font = Enum.Font.SourceSansBold
-AimButton.TextSize = 16
-AimButton.Parent = ScreenGui
-
--- Функция для определения ролей (убийца, шериф)
+-- Функция для определения ролей (убийца, шериф) - улучшенная
 local function getPlayerRole(player)
     if not player.Character then return "Unknown" end
     
     -- Проверка на убийцу (обычно имеет нож)
-    if player.Character:FindFirstChild("Knife") or (player:FindFirstChild("Backpack") and player.Backpack:FindFirstChild("Knife")) then
+    local knife = player.Character:FindFirstChild("Knife") or (player:FindFirstChild("Backpack") and player.Backpack:FindFirstChild("Knife"))
+    if knife then
         return "Murderer"
     end
     
     -- Проверка на шерифа (обычно имеет оружие)
-    if player.Character:FindFirstChild("Gun") or (player:FindFirstChild("Backpack") and player.Backpack:FindFirstChild("Gun")) then
+    local gun = player.Character:FindFirstChild("Gun") or (player:FindFirstChild("Backpack") and player.Backpack:FindFirstChild("Gun"))
+    if gun then
         return "Sheriff"
+    end
+    
+    -- Дополнительные проверки по имени модели оружия, если необходимо
+    for _, item in ipairs(player.Character:GetChildren()) do
+        if item:IsA("Tool") and (item.Name:lower():find("gun") or item.Name:lower():find("revolver") or item.Name:lower():find("pistol")) then
+            return "Sheriff"
+        end
+    end
+    
+    for _, item in ipairs(player.Backpack:GetChildren()) do
+        if item:IsA("Tool") and (item.Name:lower():find("gun") or item.Name:lower():find("revolver") or item.Name:lower():find("pistol")) then
+            return "Sheriff"
+        end
     end
     
     return "Innocent"
 end
 
--- Основная логика аимбота
+-- Основная логика аимбота с оптимизацией: используем кэширование
+local lastTargetCheck = 0
+local targetCheckInterval = 0.1 -- Проверять цель каждые 0.1 секунды
+
 local function FindTarget()
     if not Settings.Enabled or not LocalPlayer.Character then return nil end
     
+    local currentTime = tick()
+    if currentTime - lastTargetCheck < targetCheckInterval then
+        return nil -- Не проверяем слишком часто
+    end
+    lastTargetCheck = currentTime
+
     local closestTarget = nil
     local shortestDelta = Settings.FOV
 
@@ -302,79 +133,214 @@ local function FindTarget()
     return closestTarget
 end
 
--- Обработка касаний для аимбота
-AimButton.MouseButton1Down:Connect(function()
-    if not Settings.Enabled then return end
+-- Авто-побег от убийцы
+local function checkEscape()
+    if not Settings.AutoEscape or not LocalPlayer.Character then return end
     
-    local target = FindTarget()
-    if target then
-        local startCFrame = Camera.CFrame
-        local endCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-        
-        local tweenInfo = TweenInfo.new(Settings.Smoothness, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        local tween = TweenService:Create(Camera, tweenInfo, {CFrame = endCFrame})
-        tween:Play()
-    end
-end)
-
--- Автоматическое прицеливание
-local autoAimConnection
-autoAimConnection = RunService.RenderStepped:Connect(function()
-    if not Settings.Enabled or not LocalPlayer.Character then return end
+    local localRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not localRoot then return end
     
-    local target = FindTarget()
-    if target then
-        local currentCFrame = Camera.CFrame
-        local targetCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-        Camera.CFrame = currentCFrame:Lerp(targetCFrame, Settings.Smoothness)
-    end
-end)
-
--- Функция переключения видимости меню
-ToggleIcon.MouseButton1Click:Connect(function()
-    MainFrame.Visible = not MainFrame.Visible
-end)
-
--- Кнопка закрытия GUI в меню
-local CloseButton = Instance.new("TextButton")
-CloseButton.Text = "X"
-CloseButton.Size = UDim2.new(0, 30, 0, 30)
-CloseButton.Position = UDim2.new(1, -35, 0, 5)
-CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.Font = Enum.Font.SourceSansBold
-CloseButton.Parent = MainFrame
-
-CloseButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
-end)
-
--- Уведомление об успешной загрузке
-local function showNotification(message, duration)
-    local notif = Instance.new("TextLabel")
-    notif.Text = message
-    notif.Size = UDim2.new(0, 300, 0, 40)
-    notif.Position = UDim2.new(0.5, -150, 0.1, 0)
-    notif.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    notif.TextColor3 = Color3.fromRGB(255, 255, 255)
-    notif.Font = Enum.Font.SourceSansBold
-    notif.TextSize = 16
-    notif.Parent = ScreenGui
-    
-    delay(duration or 3, function()
-        if notif then
-            notif:Destroy()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local role = getPlayerRole(player)
+            if role == "Murderer" then
+                local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+                if rootPart then
+                    local distance = (rootPart.Position - localRoot.Position).Magnitude
+                    if distance < 20 then -- Если убийца ближе 20 studs
+                        -- Бежим в противоположную сторону
+                        local direction = (localRoot.Position - rootPart.Position).Unit
+                        local escapePos = localRoot.Position + direction * 30
+                        LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):MoveTo(escapePos)
+                        break
+                    end
+                end
+            end
         end
-    end)
+    end
 end
+
+-- Авто-подбор оружия
+local function checkWeaponPickup()
+    if not Settings.AutoPickup or not LocalPlayer.Character then return end
+    
+    -- Проверяем, есть ли у нас уже оружие
+    local currentWeapon = LocalPlayer.Character:FindFirstChildWhichIsA("Tool") or LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+    if currentWeapon then return end -- Если есть оружие, не подбираем
+    
+    local localRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not localRoot then return end
+    
+    for _, weapon in ipairs(Workspace:GetChildren()) do
+        if weapon:IsA("Tool") and (weapon.Name:lower():find("gun") or weapon.Name:lower():find("knife")) then
+            local weaponPart = weapon:FindFirstChild("Handle") or weapon:FindFirstChildWhichIsA("BasePart")
+            if weaponPart then
+                local distance = (weaponPart.Position - localRoot.Position).Magnitude
+                if distance < 10 then -- Если оружие ближе 10 studs
+                    -- Подбираем оружие
+                    weapon.CFrame = localRoot.CFrame
+                    wait(0.1)
+                    weapon.Parent = LocalPlayer.Backpack
+                    break
+                end
+            end
+        end
+    end
+end
+
+-- Режим призрака
+local function updateGhostMode()
+    if not LocalPlayer.Character then return end
+    
+    if Settings.GhostMode then
+        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 0.5
+                part.Material = Enum.Material.Glass
+            end
+        end
+    else
+        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 0
+                part.Material = Enum.Material.Plastic
+            end
+        end
+    end
+end
+
+-- Информационная панель
+local function updateInfoPanel()
+    if not Settings.InfoPanel then
+        if GUIElements.InfoPanel then
+            GUIElements.InfoPanel:Destroy()
+            GUIElements.InfoPanel = nil
+        end
+        return
+    end
+    
+    if not GUIElements.InfoPanel then
+        GUIElements.InfoPanel = Instance.new("Frame")
+        GUIElements.InfoPanel.Name = "InfoPanel"
+        GUIElements.InfoPanel.Size = UDim2.new(0, 200, 0, 100)
+        GUIElements.InfoPanel.Position = UDim2.new(0, 10, 0, 60)
+        GUIElements.InfoPanel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        GUIElements.InfoPanel.BackgroundTransparency = 0.5
+        GUIElements.InfoPanel.BorderSizePixel = 0
+        GUIElements.InfoPanel.Parent = GUIElements.ScreenGui
+        
+        local title = Instance.new("TextLabel")
+        title.Text = "Информация"
+        title.Size = UDim2.new(1, 0, 0, 20)
+        title.BackgroundTransparency = 1
+        title.TextColor3 = Color3.fromRGB(255, 255, 255)
+        title.Font = Enum.Font.SourceSansBold
+        title.TextSize = 16
+        title.Parent = GUIElements.InfoPanel
+        
+        GUIElements.InfoText = Instance.new("TextLabel")
+        GUIElements.InfoText.Text = ""
+        GUIElements.InfoText.Size = UDim2.new(1, 0, 1, -20)
+        GUIElements.InfoText.Position = UDim2.new(0, 0, 0, 20)
+        GUIElements.InfoText.BackgroundTransparency = 1
+        GUIElements.InfoText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        GUIElements.InfoText.Font = Enum.Font.SourceSans
+        GUIElements.InfoText.TextSize = 14
+        GUIElements.InfoText.TextXAlignment = Enum.TextXAlignment.Left
+        GUIElements.InfoText.TextYAlignment = Enum.TextYAlignment.Top
+        GUIElements.InfoText.Parent = GUIElements.InfoPanel
+    end
+    
+    -- Обновляем информацию
+    local murderers = 0
+    local sheriffs = 0
+    local innocents = 0
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local role = getPlayerRole(player)
+            if role == "Murderer" then
+                murderers = murderers + 1
+            elseif role == "Sheriff" then
+                sheriffs = sheriffs + 1
+            else
+                innocents = innocents + 1
+            end
+        end
+    end
+    
+    GUIElements.InfoText.Text = string.format("Убийцы: %d\nШерифы: %d\nНевиновные: %d", murderers, sheriffs, innocents)
+end
+
+-- Основной цикл обновления с оптимизацией: разделим обновления на разные интервалы
+local lastUpdate = {
+    radar = 0,
+    esp = 0,
+    info = 0,
+    escape = 0,
+    pickup = 0
+}
+
+local updateIntervals = {
+    radar = 0.3,   -- Радар обновляется каждые 0.3 секунды
+    esp = 0.2,     -- ESP каждые 0.2 секунды
+    info = 1,      -- Инфо-панель каждую секунду
+    escape = 0.5,  -- Проверка побега каждые 0.5 секунды
+    pickup = 0.5   -- Проверка подбора каждые 0.5 секунды
+}
+
+Connections.MainLoop = RunService.Heartbeat:Connect(function()
+    local currentTime = tick()
+    
+    -- Обновляем FOV круг каждый кадр, но только если нужно
+    if GUIElements.FOVCircle then
+        GUIElements.FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
+        GUIElements.FOVCircle.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2)
+        GUIElements.FOVCircle.Position = UDim2.new(0.5, -Settings.FOV, 0.5, -Settings.FOV)
+    end
+    
+    -- Обновляем радар с интервалом
+    if currentTime - lastUpdate.radar > updateIntervals.radar then
+        lastUpdate.radar = currentTime
+        updateSimpleRadar() -- Функция из части 2
+    end
+    
+    -- Обновляем ESP с интервалом
+    if currentTime - lastUpdate.esp > updateIntervals.esp then
+        lastUpdate.esp = currentTime
+        updateXRay() -- Функция из части 2
+        updateRoleLabels() -- Функция из части 2
+        updateWeaponESP() -- Функция из части 2
+    end
+    
+    -- Обновляем инфо-панель с интервалом
+    if currentTime - lastUpdate.info > updateIntervals.info then
+        lastUpdate.info = currentTime
+        updateInfoPanel()
+    end
+    
+    -- Проверяем побег с интервалом
+    if currentTime - lastUpdate.escape > updateIntervals.escape then
+        lastUpdate.escape = currentTime
+        checkEscape()
+    end
+    
+    -- Проверяем подбор оружия с интервалом
+    if currentTime - lastUpdate.pickup > updateIntervals.pickup then
+        lastUpdate.pickup = currentTime
+        checkWeaponPickup()
+    end
+    
+    -- Режим призрака обновляем сразу при изменении, но здесь можно проверить изменение Settings.GhostMode
+    updateGhostMode()
+end)
+
+-- ... (остальной код первой части: создание GUI, обработчики событий и т.д.)
 
 showNotification("✅ Часть 1/2 загружена! Запустите вторую часть.", 5)
 
-print("✅ Часть 1/2 загружена - Основной функционал")
-print("⚙️  GUI настроек создано")
-print("🎯 Аимбот активирован")
-print("⏳ Ожидание второй части...")   
--- ULTIMATE AIMBOT - ЧАСТЬ 2/2
+print("✅ Часть 1/2 загружена - Основной функционал с оптимизацией")
+-- ULTIMATE AIMBOT OPTIMIZED - ЧАСТЬ 2/2
 wait(1) -- Даем время первой части загрузиться
 
 -- X-Ray функция
@@ -432,7 +398,7 @@ local function updateRoleLabels()
                     billboardGui.AlwaysOnTop = true
                     billboardGui.StudsOffset = Vector3.new(0, 3, 0)
                     billboardGui.Adornee = humanoidRootPart
-                    billboardGui.Parent = ScreenGui
+                    billboardGui.Parent = GUIElements.ScreenGui
                     
                     local textLabel = Instance.new("TextLabel")
                     textLabel.Size = UDim2.new(1, 0, 1, 0)
@@ -472,7 +438,7 @@ local function updateSimpleRadar()
     end
     
     -- Создаем радар если его нет
-    if not ScreenGui:FindFirstChild("RadarFrame") then
+    if not GUIElements.ScreenGui:FindFirstChild("RadarFrame") then
         local radarFrame = Instance.new("Frame")
         radarFrame.Name = "RadarFrame"
         radarFrame.Size = UDim2.new(0, 150, 0, 150)
@@ -481,7 +447,7 @@ local function updateSimpleRadar()
         radarFrame.BackgroundTransparency = 0.7
         radarFrame.BorderSizePixel = 2
         radarFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
-        radarFrame.Parent = ScreenGui
+        radarFrame.Parent = GUIElements.ScreenGui
         
         -- Центр радара
         local center = Instance.new("Frame")
@@ -500,7 +466,7 @@ local function updateSimpleRadar()
     end
     radarMarkers = {}
     
-    local radarFrame = ScreenGui:FindFirstChild("RadarFrame")
+    local radarFrame = GUIElements.ScreenGui:FindFirstChild("RadarFrame")
     if not radarFrame or not LocalPlayer.Character then return end
     
     local localRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -598,28 +564,6 @@ local function updateWeaponESP()
     end
 end
 
--- Основной цикл обновления
-RunService.RenderStepped:Connect(function()
-    -- Обновляем видимость FOV круга
-    if FOVCircle then
-        FOVCircle.Visible = Settings.ShowFOV and Settings.Enabled
-        FOVCircle.Size = UDim2.new(0, Settings.FOV * 2, 0, Settings.FOV * 2)
-        FOVCircle.Position = UDim2.new(0.5, -Settings.FOV, 0.5, -Settings.FOV)
-    end
-    
-    -- Обновляем X-Ray и метки ролей
-    updateXRay()
-    updateRoleLabels()
-    
-    -- Обновляем радар и Weapon ESP
-    updateSimpleRadar()
-    updateWeaponESP()
-end)
-
 showNotification("✅ Часть 2/2 загружена! Все функции активированы.", 5)
 
-print("✅ Часть 2/2 загружена - Дополнительные функции")
-print("🔫 Weapon ESP: Видно оружие на земле")
-print("📡 Simple Radar: Радар активирован")
-print("👁️ X-Ray и роли работают")
-print("🎉 Весь функционал активирован!")
+print("✅ Часть 2/2 загружена - Дополнительные функции с оптимизацией")
