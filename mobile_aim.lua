@@ -650,34 +650,51 @@ button.Font = Enum.Font.SourceSansBold
 button.TextSize = 16
 button.Parent = screenGui
 
--- Анимация падения
-local function setupFallAnimation()
+-- Создаем анимацию падения
+local function createFallAnimation()
+    -- Создаем анимацию с помощью ключевых кадров
+    local animation = Instance.new("Animation")
+    animation.AnimationId = "rbxassetid://35654637" -- ID анимации падения
+    
+    local animationTrack = Humanoid:LoadAnimation(animation)
+    animationTrack.Looped = true
+    animationTrack.Priority = Enum.AnimationPriority.Action
+    
+    return animationTrack
+end
+
+-- Загружаем анимацию
+local fallAnimationTrack = createFallAnimation()
+
+-- Функция для анимации падения
+local function playFallAnimation()
     if not FALL_ANIMATION_ENABLED then return end
     
-    -- Создаем анимацию падения
-    local fallAnimation = Instance.new("Animation")
-    fallAnimation.AnimationId = "rbxassetid://3515491059" -- ID анимации падения
-    
-    local fallTrack = Humanoid:LoadAnimation(fallAnimation)
-    
-    -- Функция для определения, стоит ли персонаж
-    local function isStanding()
-        return Humanoid.MoveDirection.Magnitude < 0.1 and Humanoid.FloorMaterial ~= Enum.Material.Air
-    end
-    
-    -- Проверяем состояние каждые 0.1 секунды
-    while FALL_ANIMATION_ENABLED do
-        if isStanding() then
-            fallTrack:Play()
-            -- Добавляем небольшую задержку для реалистичности
-            wait(math.random(0.5, 2.0))
+    -- Анимируем падение с помощью изменения положения частей тела
+    while FALL_ANIMATION_ENABLED and Character and Humanoid.Health > 0 do
+        -- Проверяем, стоит ли персонаж
+        if Humanoid.MoveDirection.Magnitude < 0.1 then
+            -- Воспроизводим анимацию падения
+            fallAnimationTrack:Play()
+            
+            -- Добавляем дополнительную анимацию, наклоняя тело
+            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, 0, math.rad(10))
+            wait(0.2)
+            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, 0, math.rad(-10))
+            wait(0.2)
         else
-            fallTrack:Stop()
+            fallAnimationTrack:Stop()
+            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, 0, 0)
         end
+        
         wait(0.1)
     end
     
-    fallTrack:Stop() -- Останавливаем анимацию при выключении
+    -- Останавливаем анимацию при выходе из цикла
+    fallAnimationTrack:Stop()
+    if HumanoidRootPart then
+        HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, 0, 0)
+    end
 end
 
 -- Изменение внешнего вида (скина)
@@ -750,7 +767,7 @@ button.MouseButton1Click:Connect(function()
         button.Text = "Выключить анимацию"
         button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
         applyCustomSkin()
-        spawn(setupFallAnimation)
+        spawn(playFallAnimation)
     else
         button.Text = "Включить анимацию"
         button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
@@ -764,19 +781,21 @@ LocalPlayer.CharacterAdded:Connect(function(newCharacter)
     Humanoid = Character:WaitForChild("Humanoid")
     HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
     
+    -- Пересоздаем анимацию для нового персонажа
+    fallAnimationTrack = createFallAnimation()
+    
     -- Применяем изменения, если они активны
     if CUSTOM_SKIN_ENABLED then
         applyCustomSkin()
     end
     
     if FALL_ANIMATION_ENABLED then
-        spawn(setupFallAnimation)
+        spawn(playFallAnimation)
     end
 end)
 
 print("✅ GUI с кнопкой создан!")
 print("🎮 Нажмите кнопку для включения/выключения анимации и скина")
-
 showNotification("✅ Часть 2/2 загружена! Все функции активированы.", 5)
 
 print("✅ Часть 2/2 загружена - Дополнительные функции")
